@@ -5,6 +5,24 @@ module Akaza
         file_content(path)[first_index(path)..last_index(path)]
       end
 
+      def traverse(&block)
+        block.call self
+        children.each do |child|
+          child.traverse(&block) if child.is_a?(RubyVM::AbstractSyntaxTree::Node)
+        end
+      end
+
+      def find(&block)
+        traverse do |node|
+          return node if block.call(node)
+        end
+        nil
+      end
+
+      def deconstruct
+        [type, *children]
+      end
+
       # method node ext
 
       def scope_body
