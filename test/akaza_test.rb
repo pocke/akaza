@@ -6,7 +6,7 @@ class AkazaTest < Minitest::Test
     input = StringIO.new
     output = StringIO.new
     Akaza.eval(code, input: input, output: output)
-    assert_equal "Hello, world of spaces!\r\n", output.string
+    assert_equal "Hello, world!", output.string
   end
 
   def test_eval_sum
