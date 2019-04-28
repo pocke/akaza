@@ -94,7 +94,7 @@ If `Akaza::Body` is omitted, the method only evaluates Whitespace program. The m
 
 For example:
 
-```
+```ruby
 require 'akaza'
 
 class A
