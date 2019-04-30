@@ -25,15 +25,25 @@ module Akaza
         in [:stack, :pop]
           @stack.pop
         in [:calc, :add]
-          @stack.push @stack.pop + @stack.pop
+          r = @stack.pop
+          l = @stack.pop
+          @stack.push l + r
         in [:calc, :sub]
-          @stack.push @stack.pop - @stack.pop
+          r = @stack.pop
+          l = @stack.pop
+          @stack.push l - r
         in [:calc, :multi]
-          @stack.push @stack.pop * @stack.pop
+          r = @stack.pop
+          l = @stack.pop
+          @stack.push l * r
         in [:calc, :div]
-          @stack.push @stack.pop / @stack.pop
+          r = @stack.pop
+          l = @stack.pop
+          @stack.push l / r
         in [:calc, :mod]
-          @stack.push @stack.pop % @stack.pop
+          r = @stack.pop
+          l = @stack.pop
+          @stack.push l % r
         in [:heap, :save]
           val = @stack.pop
           addr = @stack.pop
@@ -42,13 +52,13 @@ module Akaza
           addr = @stack.pop
           @stack.push @heap[addr]
         in [:flow, :def, label]
-          # does nothing
+          # skip
         in [:flow, :call, label]
-          raise "unknwon label:#{label}" unless @labels.key?(label)
+          raise "unknwon label:#{label.inspect}" unless @labels.key?(label)
           @call_stack.push @index
           @index = @labels[label]
         in [:flow, :jump, label]
-          raise "unknwon label:#{label}" unless @labels.key?(label)
+          raise "unknwon label:#{label.inspect}" unless @labels.key?(label)
           @index = @labels[label]
         in [:flow, :jump_if_zero, label]
           @index = @labels[label] if @stack.pop == 0
@@ -77,7 +87,7 @@ module Akaza
       @commands.each.with_index do |command, index|
         case command
         in [:flow, :def, label]
-          @labels[label] = index - 1
+          @labels[label] = index
         else
           # skip
         end
