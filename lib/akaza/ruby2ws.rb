@@ -17,9 +17,12 @@ module Akaza
   #   # flow
   #   def foo
   #   end
+  #
   #   exit
+  #
   #   if x == 0
   #   end
+  #
   #   if x < 0
   #   end
   #
