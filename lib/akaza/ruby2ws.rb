@@ -112,6 +112,9 @@ module Akaza
           in [:UNLESS, cond, else_body, if_body]
             commands.concat(compile_if(cond, if_body, else_body))
             opt[:skip_children] = true
+          in [:WHILE, cond, body]
+            commands.concat(compile_while(cond, body))
+            opt[:skip_children] = true
           end
         end
 
@@ -247,6 +250,37 @@ module Akaza
           body.(x, :jump_if_neg)
         in [:OPCALL, [:LIT, 0], :<, [:ARRAY, x, nil]]
           body.(x, :jump_if_neg)
+        end
+
+        commands
+      end
+
+      private def compile_while(cond, body)
+        commands = []
+        cond_label = str_to_int("cond_#{next_label_index}", type: :condition)
+        body_label = str_to_int("body_#{next_label_index}", type: :condition)
+        end_label = str_to_int("end_#{next_label_index}", type: :condition)
+
+        make_body = -> (x, sym) do
+          commands << [:flow, :def, cond_label]
+          commands.concat(push_value(x))
+          commands << [:flow, sym, body_label]
+          commands << [:flow, :jump, end_label]
+          commands << [:flow, :def, body_label]
+          commands.concat(ast_to_commands(body, main: false))
+          commands << [:flow, :jump, cond_label]
+          commands << [:flow, :def, end_label]
+        end
+
+        case cond
+        in [:OPCALL, [:LIT, 0], :==, [:ARRAY, x, nil]]
+          make_body.(x, :jump_if_zero)
+        in [:OPCALL, x, :==, [:ARRAY, [:LIT, 0], nil]]
+          make_body.(x, :jump_if_zero)
+        in [:OPCALL, x, :<, [:ARRAY, [:LIT, 0], nil]]
+          make_body.(x, :jump_if_neg)
+        in [:OPCALL, [:LIT, 0], :<, [:ARRAY, x, nil]]
+          make_body.(x, :jump_if_neg)
         end
 
         commands

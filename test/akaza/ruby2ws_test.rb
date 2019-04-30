@@ -171,6 +171,28 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_while
+    assert_eval "9876543210", <<~RUBY
+      x = 9
+      c = 0
+      while c == 0
+        put_as_number x
+        c = 1 if x == 0
+        x = x - 1
+      end
+    RUBY
+  end
+
+  def test_transpile_while2
+    assert_eval "0123456789", <<~RUBY
+      x = -10
+      while x < 0
+        put_as_number 10 + x
+        x = x + 1
+      end
+    RUBY
+  end
+
   class AnyClass
     def initialize(klass)
       @klass = klass
