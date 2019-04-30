@@ -60,46 +60,25 @@ module Akaza
         commands_to_ws(commands)
       end
 
-      def ast_to_commands(ast, method:)
+      private def ast_to_commands(ast, method:)
         commands = []
         methods = []
         lvars = []
 
         ast.traverse do |node, opt|
           case node
-          in [:FCALL, :put_as_number, [:ARRAY, [:LVAR, var], nil]]
-            commands << [:stack, :push, str_to_int(var, type: :variable)]
-            commands << [:heap, :load]
+          in [:FCALL, :put_as_number, [:ARRAY, arg, nil]]
+            commands.concat(push_value(arg))
             commands << [:io, :write_num]
             opt[:skip_children] = true
-          in [:FCALL, :put_as_number, [:ARRAY, [:LIT, num], nil]]
-            commands << [:stack, :push, num]
-            commands << [:io, :write_num]
-            opt[:skip_children] = true
-          in [:FCALL, :put_as_char, [:ARRAY, [:LVAR, var], nil]]
-            commands << [:stack, :push, str_to_int(var, type: :variable)]
-            commands << [:heap, :load]
+          in [:FCALL, :put_as_char, [:ARRAY, arg, nil]]
+            commands.concat(push_value(arg))
             commands << [:io, :write_char]
             opt[:skip_children] = true
-          in [:FCALL, :put_as_char, [:ARRAY, [:STR, str], nil]]
-            raise ParserError, "String size must be 1, but it's #{str} (#{str.size})" if str.size != 1
-
-            commands << [:stack, :push, str.ord]
-            commands << [:io, :write_char]
-            opt[:skip_children] = true
-          in [:LASGN, var, [:LIT, num]]
+          in [:LASGN, var, arg]
             var_addr = str_to_int(var, type: :variable)
             commands << [:stack, :push, var_addr]
-            commands << [:stack, :push, num]
-            commands << [:heap, :save]
-            opt[:skip_children] = true
-            lvars << var_addr
-          in [:LASGN, var, [:STR, str]]
-            raise ParserError, "String size must be 1, but it's #{str} (#{str.size})" if str.size != 1
-
-            var_addr = str_to_int(var, type: :variable)
-            commands << [:stack, :push, var_addr]
-            commands << [:stack, :push, str.ord]
+            commands.concat(push_value(arg))
             commands << [:heap, :save]
             opt[:skip_children] = true
             lvars << var_addr
@@ -115,19 +94,16 @@ module Akaza
           in [:BLOCK, *_]
             # skip
           in [:VCALL, name]
-            lvars.each do |var_addr|
-              # stack.push(addr); stack.push(val)
-              commands << [:stack, :push, var_addr]
-              commands << [:stack, :push, var_addr]
-              commands << [:heap, :load]
-              # Fill zero
-              commands << [:stack, :push, var_addr]
-              commands << [:stack, :push, 0]
-              commands << [:heap, :save]
+            with_storing_lvars(lvars, commands) do
+              commands << [:flow, :call, str_to_int(name, type: :method)]
             end
-            commands << [:flow, :call, str_to_int(name, type: :method)]
-            lvars.size.times do
-              commands << [:heap, :save]
+            opt[:skip_children] = true
+          in [:FCALL, name, [:ARRAY, *args, nil]]
+            with_storing_lvars(lvars, commands) do
+              args.each do |arg|
+                push_value(arg)
+              end
+              commands << [:flow, :call, str_to_int(name, type: :method)]
             end
             opt[:skip_children] = true
           end
@@ -138,7 +114,7 @@ module Akaza
         commands
       end
 
-      def commands_to_ws(commands)
+      private def commands_to_ws(commands)
         buf = +""
         commands.each do |command|
           case command
@@ -163,6 +139,46 @@ module Akaza
           end
         end
         buf
+      end
+
+      private def with_storing_lvars(lvars, commands, &block)
+        lvars.each do |var_addr|
+          # stack.push(addr); stack.push(val)
+          commands << [:stack, :push, var_addr]
+          commands << [:stack, :push, var_addr]
+          commands << [:heap, :load]
+          # Fill zero
+          commands << [:stack, :push, var_addr]
+          commands << [:stack, :push, 0]
+          commands << [:heap, :save]
+        end
+
+        block.call
+
+        lvars.size.times do
+          commands << [:heap, :save]
+        end
+      end
+
+      private def push_value(ast)
+        commands = []
+
+        case ast
+        in [:LIT, num]
+          commands << [:stack, :push, num]
+        in [:STR, str]
+          check_char!(str)
+          commands << [:stack, :push, str.ord]
+        in [:LVAR, name]
+          commands << [:stack, :push, str_to_int(name, type: :variable)]
+          commands << [:heap, :load]
+        end
+
+        commands
+      end
+
+      private def check_char!(char)
+        raise ParserError, "String size must be 1, but it's #{char} (#{char.size})" if char.size != 1
       end
 
       private def str_to_int(str, type:)
