@@ -3,6 +3,7 @@ require 'akaza/ast_ext'
 require 'akaza/annotation'
 require 'akaza/parser'
 require 'akaza/vm'
+require 'akaza/ruby2ws'
 
 module Akaza
   def self.eval(code, input: $stdin, output: $stdout)
