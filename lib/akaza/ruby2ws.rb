@@ -143,6 +143,8 @@ module Akaza
             buf << NL << TAB << SPACE << num_to_ws(label)
           in [:flow, :jump, label]
             buf << NL << SPACE << NL << num_to_ws(label)
+          in [:flow, :jump_if_neg, label]
+            buf << NL << TAB << TAB << num_to_ws(label)
           end
         end
         buf
@@ -189,9 +191,9 @@ module Akaza
         else_label = str_to_int("else_#{next_label_index}", type: :condition)
         end_label = str_to_int("end_#{next_label_index}", type: :condition)
 
-        eq_zero = -> (x) do
+        body = -> (x, sym) do
           commands.concat(push_value(x))
-          commands << [:flow, :jump_if_zero, else_label]
+          commands << [:flow, sym, else_label]
           commands.concat(ast_to_commands(else_body, main: false)) if else_body
           commands << [:flow, :jump, end_label]
           commands << [:flow, :def, else_label]
@@ -199,11 +201,19 @@ module Akaza
           commands << [:flow, :def, end_label]
         end
 
+        lt_zero = -> (x) do
+          commands.concat(push_value(x))
+        end
+
         case cond
         in [:OPCALL, [:LIT, 0], :==, [:ARRAY, x, nil]]
-          eq_zero.(x)
+          body.(x, :jump_if_zero)
         in [:OPCALL, x, :==, [:ARRAY, [:LIT, 0], nil]]
-          eq_zero.(x)
+          body.(x, :jump_if_zero)
+        in [:OPCALL, x, :<, [:ARRAY, [:LIT, 0], nil]]
+          body.(x, :jump_if_neg)
+        in [:OPCALL, [:LIT, 0], :<, [:ARRAY, x, nil]]
+          body.(x, :jump_if_neg)
         end
 
         commands
