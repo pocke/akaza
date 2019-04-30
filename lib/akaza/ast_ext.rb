@@ -5,15 +5,14 @@ module Akaza
         file_content(path)[first_index(path)..last_index(path)]
       end
 
-      def traverse(on_exit: nil, &on_enter)
+      def traverse(&on_enter)
         opt = {}
         on_enter.call self, opt
         unless opt[:skip_children]
           children.each do |child|
-            child.traverse(on_exit: on_exit, &on_enter) if child.is_a?(RubyVM::AbstractSyntaxTree::Node)
+            child.traverse(&on_enter) if child.is_a?(RubyVM::AbstractSyntaxTree::Node)
           end
         end
-        on_exit&.call self
       end
 
       def find(&block)

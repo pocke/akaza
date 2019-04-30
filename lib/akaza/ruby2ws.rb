@@ -55,64 +55,66 @@ module Akaza
       end
 
       def transpile
-        commands = ruby_to_commands
+        commands = ast_to_commands
         commands_to_ws(commands)
       end
 
-      def ruby_to_commands
-        ast = RubyVM::AbstractSyntaxTree.parse(@ruby_code)
+      def ast_to_commands(ast = RubyVM::AbstractSyntaxTree.parse(@ruby_code))
         commands = []
-        methods = {}
-        current_commands = commands
+        methods = []
 
-        on_exit = -> (node) do
-          if node.type == :DEFN
-            current_commands = commands
-          end
-        end
-
-        ast.traverse(on_exit: on_exit) do |node, opt|
+        ast.traverse do |node, opt|
           case node
           in [:FCALL, :put_as_number, [:ARRAY, [:LVAR, var], nil]]
-            current_commands << [:stack, :push, str_to_int(var, type: :variable)]
-            current_commands << [:heap, :load]
-            current_commands << [:io, :write_num]
+            commands << [:stack, :push, str_to_int(var, type: :variable)]
+            commands << [:heap, :load]
+            commands << [:io, :write_num]
             opt[:skip_children] = true
           in [:FCALL, :put_as_number, [:ARRAY, [:LIT, num], nil]]
-            current_commands << [:stack, :push, num]
-            current_commands << [:io, :write_num]
+            commands << [:stack, :push, num]
+            commands << [:io, :write_num]
             opt[:skip_children] = true
           in [:FCALL, :put_as_char, [:ARRAY, [:LVAR, var], nil]]
-            current_commands << [:stack, :push, str_to_int(var, type: :variable)]
-            current_commands << [:heap, :load]
-            current_commands << [:io, :write_char]
+            commands << [:stack, :push, str_to_int(var, type: :variable)]
+            commands << [:heap, :load]
+            commands << [:io, :write_char]
             opt[:skip_children] = true
           in [:FCALL, :put_as_char, [:ARRAY, [:STR, str], nil]]
             raise ParserError, "String size must be 1, but it's #{str} (#{str.size})" if str.size != 1
 
-            current_commands << [:stack, :push, str.ord]
-            current_commands << [:io, :write_char]
+            commands << [:stack, :push, str.ord]
+            commands << [:io, :write_char]
             opt[:skip_children] = true
           in [:LASGN, var, [:LIT, num]]
-            current_commands << [:stack, :push, str_to_int(var, type: :variable)]
-            current_commands << [:stack, :push, num]
-            current_commands << [:heap, :save]
+            commands << [:stack, :push, str_to_int(var, type: :variable)]
+            commands << [:stack, :push, num]
+            commands << [:heap, :save]
             opt[:skip_children] = true
           in [:LASGN, var, [:STR, str]]
             raise ParserError, "String size must be 1, but it's #{str} (#{str.size})" if str.size != 1
 
-            current_commands << [:stack, :push, str_to_int(var, type: :variable)]
-            current_commands << [:stack, :push, str.ord]
-            current_commands << [:heap, :save]
+            commands << [:stack, :push, str_to_int(var, type: :variable)]
+            commands << [:stack, :push, str.ord]
+            commands << [:heap, :save]
+            opt[:skip_children] = true
+          in [:DEFN, name, [:SCOPE, _, _, body]]
+            methods << [
+              [:flow, :def, str_to_int(name, type: :method)],
+              *ast_to_commands(body),
+              [:flow, :end],
+            ]
             opt[:skip_children] = true
           in [:SCOPE, *_]
             # skip
           in [:BLOCK, *_]
             # skip
+          in [:VCALL, name]
+            commands << [:flow, :call, str_to_int(name, type: :method)]
+            opt[:skip_children] = true
           end
         end
 
-        commands.concat(*methods.values)
+        commands.concat(*methods)
         commands + [[:flow, :exit]]
       end
 
@@ -132,6 +134,12 @@ module Akaza
             buf << TAB << NL << SPACE << TAB
           in [:flow, :exit]
             buf << NL << NL << NL
+          in [:flow, :call, num]
+            buf << NL << SPACE << TAB << num_to_ws(num)
+          in [:flow, :def, num]
+            buf << NL << SPACE << SPACE << num_to_ws(num)
+          in [:flow, :end]
+            buf << NL << TAB << NL
           end
         end
         buf
@@ -140,8 +148,8 @@ module Akaza
       private def str_to_int(str, type:)
         prefix =
           case type
-          when :variable then 'var'
-          when :method   then 'func'
+          when :variable then 'v'
+          when :method   then 'f'
           else
             raise "Unknown type: #{type}"
           end

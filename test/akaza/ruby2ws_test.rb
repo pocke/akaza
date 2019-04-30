@@ -30,10 +30,17 @@ class Ruby2wsTest < Minitest::Test
     assert_equal "a", out.string
   end
 
-  # ruby_to_commands
+  def test_transpile_def
+    ws = Akaza::Ruby2ws::Transpiler.new("def put_42() put_as_number(42) end; put_42").transpile
+    out = StringIO.new
+    Akaza.eval(ws, output: out)
+    assert_equal "42", out.string
+  end
 
-  def test_ruby_to_commands_assign
-    commands = Akaza::Ruby2ws::Transpiler.new("x = 1").ruby_to_commands
+  # ast_to_commands
+
+  def test_ast_to_commands_assign
+    commands = Akaza::Ruby2ws::Transpiler.new("x = 1").ast_to_commands
     assert_equal [
       [:stack, :push, any(Integer)],
       [:stack, :push, 1],
@@ -42,8 +49,8 @@ class Ruby2wsTest < Minitest::Test
     ], commands
   end
 
-  def test_ruby_to_commands_assign_putn
-    commands = Akaza::Ruby2ws::Transpiler.new("x = 1; put_as_number x").ruby_to_commands
+  def test_ast_to_commands_assign_putn
+    commands = Akaza::Ruby2ws::Transpiler.new("x = 1; put_as_number x").ast_to_commands
     assert_equal [
       [:stack, :push, any(Integer)],
       [:stack, :push, 1],
