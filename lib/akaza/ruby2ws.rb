@@ -55,13 +55,15 @@ module Akaza
       end
 
       def transpile
-        commands = ast_to_commands
+        ast = RubyVM::AbstractSyntaxTree.parse(@ruby_code)
+        commands = ast_to_commands(ast, method: false)
         commands_to_ws(commands)
       end
 
-      def ast_to_commands(ast = RubyVM::AbstractSyntaxTree.parse(@ruby_code))
+      def ast_to_commands(ast, method:)
         commands = []
         methods = []
+        lvars = []
 
         ast.traverse do |node, opt|
           case node
@@ -86,21 +88,25 @@ module Akaza
             commands << [:io, :write_char]
             opt[:skip_children] = true
           in [:LASGN, var, [:LIT, num]]
-            commands << [:stack, :push, str_to_int(var, type: :variable)]
+            var_addr = str_to_int(var, type: :variable)
+            commands << [:stack, :push, var_addr]
             commands << [:stack, :push, num]
             commands << [:heap, :save]
             opt[:skip_children] = true
+            lvars << var_addr
           in [:LASGN, var, [:STR, str]]
             raise ParserError, "String size must be 1, but it's #{str} (#{str.size})" if str.size != 1
 
-            commands << [:stack, :push, str_to_int(var, type: :variable)]
+            var_addr = str_to_int(var, type: :variable)
+            commands << [:stack, :push, var_addr]
             commands << [:stack, :push, str.ord]
             commands << [:heap, :save]
             opt[:skip_children] = true
+            lvars << var_addr
           in [:DEFN, name, [:SCOPE, _, _, body]]
             methods << [
               [:flow, :def, str_to_int(name, type: :method)],
-              *ast_to_commands(body),
+              *ast_to_commands(body, method: true),
               [:flow, :end],
             ]
             opt[:skip_children] = true
@@ -109,13 +115,27 @@ module Akaza
           in [:BLOCK, *_]
             # skip
           in [:VCALL, name]
+            lvars.each do |var_addr|
+              # stack.push(addr); stack.push(val)
+              commands << [:stack, :push, var_addr]
+              commands << [:stack, :push, var_addr]
+              commands << [:heap, :load]
+              # Fill zero
+              commands << [:stack, :push, var_addr]
+              commands << [:stack, :push, 0]
+              commands << [:heap, :save]
+            end
             commands << [:flow, :call, str_to_int(name, type: :method)]
+            lvars.size.times do
+              commands << [:heap, :save]
+            end
             opt[:skip_children] = true
           end
         end
 
+        commands += [[:flow, :exit]] unless method
         commands.concat(*methods)
-        commands + [[:flow, :exit]]
+        commands
       end
 
       def commands_to_ws(commands)

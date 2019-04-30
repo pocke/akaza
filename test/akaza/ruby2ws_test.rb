@@ -3,63 +3,55 @@ require 'test_helper'
 class Ruby2wsTest < Minitest::Test
   # transpile
   def test_transpile_putn
-    ws = Akaza::Ruby2ws::Transpiler.new("x = 42; put_as_number x").transpile
-    out = StringIO.new
-    Akaza.eval(ws, output: out)
-    assert_equal "42", out.string
+    assert_eval "42", "x = 42; put_as_number x"
   end
 
   def test_transpile_putc
-    ws = Akaza::Ruby2ws::Transpiler.new("x = 'a'; put_as_char x").transpile
-    out = StringIO.new
-    Akaza.eval(ws, output: out)
-    assert_equal "a", out.string
+    assert_eval "a", "x = 'a'; put_as_char x"
   end
 
   def test_transpile_putn_literal
-    ws = Akaza::Ruby2ws::Transpiler.new("put_as_number 42").transpile
-    out = StringIO.new
-    Akaza.eval(ws, output: out)
-    assert_equal "42", out.string
+    assert_eval "42", "put_as_number 42"
   end
 
   def test_transpile_putc_literal
-    ws = Akaza::Ruby2ws::Transpiler.new("put_as_char 'a'").transpile
-    out = StringIO.new
-    Akaza.eval(ws, output: out)
-    assert_equal "a", out.string
+    assert_eval "a", "put_as_char 'a'"
   end
 
   def test_transpile_def
-    ws = Akaza::Ruby2ws::Transpiler.new("def put_42() put_as_number(42) end; put_42").transpile
-    out = StringIO.new
-    Akaza.eval(ws, output: out)
-    assert_equal "42", out.string
+    assert_eval "42", "def put_42() put_as_number(42) end; put_42"
   end
 
-  # ast_to_commands
+  def test_transpile_def_lvar1
+    assert_eval "42", <<~RUBY
+      x = 2
 
-  def test_ast_to_commands_assign
-    commands = Akaza::Ruby2ws::Transpiler.new("x = 1").ast_to_commands
-    assert_equal [
-      [:stack, :push, any(Integer)],
-      [:stack, :push, 1],
-      [:heap, :save],
-      [:flow, :exit]
-    ], commands
+      def foo
+        put_as_number 4
+      end
+
+      foo
+      put_as_number x
+    RUBY
   end
 
-  def test_ast_to_commands_assign_putn
-    commands = Akaza::Ruby2ws::Transpiler.new("x = 1; put_as_number x").ast_to_commands
-    assert_equal [
-      [:stack, :push, any(Integer)],
-      [:stack, :push, 1],
-      [:heap, :save],
-      [:stack, :push, any(Integer)],
-      [:heap, :load],
-      [:io, :write_num],
-      [:flow, :exit]
-    ], commands
+  def test_transpile_def_lvar2
+    assert_eval "42", <<~RUBY
+      x = 2
+
+      def foo
+        x = 100
+        bar
+      end
+
+      def bar
+        x = 4
+        put_as_number x
+      end
+
+      foo
+      put_as_number x
+    RUBY
   end
 
   class AnyClass
@@ -74,5 +66,12 @@ class Ruby2wsTest < Minitest::Test
 
   def any(klass)
     AnyClass.new(klass)
+  end
+
+  def assert_eval(expected_output, code)
+    ws = Akaza::Ruby2ws::Transpiler.new(code).transpile
+    out = StringIO.new
+    Akaza.eval(ws, output: out)
+    assert_equal expected_output, out.string
   end
 end
