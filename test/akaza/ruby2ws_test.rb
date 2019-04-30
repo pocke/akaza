@@ -54,6 +54,14 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_lvar_to_lvar
+    assert_eval "42", <<~RUBY
+      x = 42
+      y = x
+      put_as_number x
+    RUBY
+  end
+
   class AnyClass
     def initialize(klass)
       @klass = klass
