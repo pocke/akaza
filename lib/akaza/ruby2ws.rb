@@ -37,6 +37,8 @@ module Akaza
     TAB = "\t"
     NL = "\n"
 
+    class ParseError < StandardError; end
+
     def self.ruby_to_ws(ruby_code)
       Transpiler.new(ruby_code).compile
     end
@@ -78,6 +80,13 @@ module Akaza
           in [:LASGN, var, [:LIT, num]]
             current_commands << [:stack, :push, str_to_int(var, type: :variable)]
             current_commands << [:stack, :push, num]
+            current_commands << [:heap, :save]
+            opt[:skip_children] = true
+          in [:LASGN, var, [:STR, str]]
+            raise ParserError, "String size must be 1, but it's #{str} (#{str.size})" if str.size != 1
+
+            current_commands << [:stack, :push, str_to_int(var, type: :variable)]
+            current_commands << [:stack, :push, str.ord]
             current_commands << [:heap, :save]
             opt[:skip_children] = true
           in [:SCOPE, *_]

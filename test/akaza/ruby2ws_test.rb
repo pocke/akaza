@@ -2,12 +2,20 @@ require 'test_helper'
 
 class Ruby2wsTest < Minitest::Test
   # transpile
-  def test_transpile
+  def test_transpile_putn
     ws = Akaza::Ruby2ws::Transpiler.new("x = 42; put_as_number x").transpile
     out = StringIO.new
     Akaza.eval(ws, output: out)
     assert_equal "42", out.string
   end
+
+  def test_transpile_putc
+    ws = Akaza::Ruby2ws::Transpiler.new("x = 'a'; put_as_char x").transpile
+    out = StringIO.new
+    Akaza.eval(ws, output: out)
+    assert_equal "a", out.string
+  end
+
 
   # ruby_to_commands
 
