@@ -115,7 +115,7 @@ module Akaza
         [:io, :write_num]
       when [TAB, SPACE]
         [:io, :read_char]
-      when [TAB, NL]
+      when [TAB, TAB]
         [:io, :read_num]
       else
         raise "unreachable: #{c}"

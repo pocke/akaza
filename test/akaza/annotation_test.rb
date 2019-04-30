@@ -16,8 +16,7 @@ class AnnotationTest < Minitest::Test
     
 #push0    
 #readnum	
-	
-#push0    
+		#push0    
 #readheap			end
 	
 end
@@ -45,8 +44,7 @@ output=StringIO.new;
     Akaza::Body;
 #push0    
 #readnum	
-	
-#push0    
+		#push0    
 #readheap			end
 	output.string.to_i
 end

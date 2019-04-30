@@ -142,7 +142,7 @@ module Akaza
           in [:io, :read_char]
             buf << TAB << NL << TAB << SPACE
           in [:io, :read_num]
-            buf << TAB << NL << TAB << NL
+            buf << TAB << NL << TAB << TAB
           in [:flow, :exit]
             buf << NL << NL << NL
           in [:flow, :call, num]

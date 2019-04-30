@@ -10,7 +10,6 @@ label
     
 push0    
 readnum	
-	
-push0    
+		push0    
 readheap			end
 	
