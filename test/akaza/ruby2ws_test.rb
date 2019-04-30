@@ -113,6 +113,26 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_read_char
+    assert_eval "rab", <<~RUBY, StringIO.new("bar")
+      x = get_as_char
+      y = get_as_char
+      z = get_as_char
+      put_as_char z
+      put_as_char y
+      put_as_char x
+    RUBY
+  end
+
+  def test_transpile_read_num
+    assert_eval "2442", <<~RUBY, StringIO.new("42\n24")
+      x = get_as_number
+      y = get_as_number
+      put_as_number y
+      put_as_number x
+    RUBY
+  end
+
   class AnyClass
     def initialize(klass)
       @klass = klass
@@ -127,10 +147,10 @@ class Ruby2wsTest < Minitest::Test
     AnyClass.new(klass)
   end
 
-  def assert_eval(expected_output, code)
+  def assert_eval(expected_output, code, input = StringIO.new(''))
     ws = Akaza::Ruby2ws::Transpiler.new(code).transpile
     out = StringIO.new
-    Akaza.eval(ws, output: out)
+    Akaza.eval(ws, input: input, output: out)
     assert_equal expected_output, out.string
   end
 end

@@ -131,6 +131,10 @@ module Akaza
             buf << TAB << NL << SPACE << SPACE
           in [:io, :write_num]
             buf << TAB << NL << SPACE << TAB
+          in [:io, :read_char]
+            buf << TAB << NL << TAB << SPACE
+          in [:io, :read_num]
+            buf << TAB << NL << TAB << NL
           in [:flow, :exit]
             buf << NL << NL << NL
           in [:flow, :call, num]
@@ -180,6 +184,18 @@ module Akaza
           commands << [:stack, :push, str.ord]
         in [:LVAR, name]
           commands << [:stack, :push, str_to_int(name, type: :variable)]
+          commands << [:heap, :load]
+        in [:VCALL, :get_as_number]
+          tmp_var = str_to_int("__tmp", type: :variable)
+          commands << [:stack, :push, tmp_var]
+          commands << [:io, :read_num]
+          commands << [:stack, :push, tmp_var]
+          commands << [:heap, :load]
+        in [:VCALL, :get_as_char]
+          tmp_var = str_to_int("__tmp", type: :variable)
+          commands << [:stack, :push, tmp_var]
+          commands << [:io, :read_char]
+          commands << [:stack, :push, tmp_var]
           commands << [:heap, :load]
         end
 
