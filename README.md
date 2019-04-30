@@ -66,8 +66,7 @@ class A
     Akaza::Body
     
 	
-	
-    
+		    
 		output.string.to_i	
 	
 end
@@ -112,8 +111,7 @@ This	code is never evaluated.
 So you can write any
 sentences as comments!  
 	
-	
-    
+		    
 			
 	
 end
@@ -123,7 +121,7 @@ a = A.new
 input = StringIO.new("20\n22\n")
 output = StringIO.new
 a.sum(input, output)
-p output.string
+p output.string # => "42"
 ```
 
 ## Development
