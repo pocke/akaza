@@ -42,7 +42,7 @@ module Akaza
           addr = @stack.pop
           @stack.push @heap[addr]
         in [:flow, :def, label]
-          raise "Unreachable"
+          # skip
         in [:flow, :call, label]
           raise "unknwon label:#{label}" unless @labels.key?(label)
           @call_stack.push @index

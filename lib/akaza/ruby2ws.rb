@@ -41,15 +41,16 @@ module Akaza
     class Transpiler
       def initialize(ruby_code)
         @ruby_code = ruby_code
+        @label_index = 0
       end
 
       def transpile
         ast = RubyVM::AbstractSyntaxTree.parse(@ruby_code)
-        commands = ast_to_commands(ast, method: false)
+        commands = ast_to_commands(ast, main: true)
         commands_to_ws(commands)
       end
 
-      private def ast_to_commands(ast, method:)
+      private def ast_to_commands(ast, main:)
         commands = []
         methods = []
         lvars = []
@@ -80,7 +81,7 @@ module Akaza
               m << [:stack, :swap]
               m << [:heap, :save]
             end
-            m.concat(ast_to_commands(body, method: true))
+            m.concat(ast_to_commands(body, main: false))
             m << [:flow, :end]
 
             methods << m
@@ -100,10 +101,31 @@ module Akaza
               commands << [:flow, :call, str_to_int(name, type: :method)]
             end
             opt[:skip_children] = true
+          in [:IF, cond, if_body, else_body] if if_body && else_body
+            else_label = str_to_int("else_#{next_label_index}", type: :condition)
+            end_label = str_to_int("end_#{next_label_index}", type: :condition)
+
+            eq_zero = -> (x) do
+              commands.concat(push_value(x))
+              commands << [:flow, :jump_if_zero, else_label]
+              commands.concat(ast_to_commands(else_body, main: false))
+              commands << [:flow, :jump, end_label]
+              commands << [:flow, :def, else_label]
+              commands.concat(ast_to_commands(if_body, main: false))
+              commands << [:flow, :def, end_label]
+            end
+
+            case cond
+            in [:OPCALL, [:LIT, 0], :==, [:ARRAY, x, nil]]
+              eq_zero.(x)
+            in [:OPCALL, x, :==, [:ARRAY, [:LIT, 0], nil]]
+              eq_zero.(x)
+            end
+            opt[:skip_children] = true
           end
         end
 
-        commands << [:flow, :exit] unless method
+        commands << [:flow, :exit] if main
         commands.concat(*methods)
         commands
       end
@@ -132,6 +154,10 @@ module Akaza
             buf << NL << SPACE << SPACE << num_to_ws(num)
           in [:flow, :end]
             buf << NL << TAB << NL
+          in [:flow, :jump_if_zero, label]
+            buf << NL << TAB << SPACE << num_to_ws(label)
+          in [:flow, :jump, label]
+            buf << NL << SPACE << NL << num_to_ws(label)
           end
         end
         buf
@@ -180,8 +206,9 @@ module Akaza
       private def str_to_int(str, type:)
         prefix =
           case type
-          when :variable then 'v'
-          when :method   then 'f'
+          when :variable  then 'v'
+          when :method    then 'f'
+          when :condition then 'c'
           else
             raise "Unknown type: #{type}"
           end
@@ -196,6 +223,10 @@ module Akaza
             SPACE
           end
         sign + num.abs.to_s(2).gsub("1", TAB).gsub('0', SPACE) + NL
+      end
+
+      private def next_label_index
+        @label_index += 1
       end
     end
   end
