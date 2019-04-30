@@ -38,7 +38,7 @@ module Akaza
     class ParseError < StandardError; end
 
     def self.ruby_to_ws(ruby_code)
-      Transpiler.new(ruby_code).compile
+      Transpiler.new(ruby_code).transpile
     end
 
     class Transpiler
