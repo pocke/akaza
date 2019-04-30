@@ -84,6 +84,24 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_if2
+    assert_eval "42", <<~RUBY
+      x = 0
+      if x == 0
+        put_as_number 42
+      end
+    RUBY
+  end
+
+  def test_transpile_unless
+    assert_eval "42", <<~RUBY
+      x = 1
+      unless x == 0
+        put_as_number 42
+      end
+    RUBY
+  end
+
   class AnyClass
     def initialize(klass)
       @klass = klass

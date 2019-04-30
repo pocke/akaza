@@ -44,11 +44,11 @@ module Akaza
         in [:flow, :def, label]
           # skip
         in [:flow, :call, label]
-          raise "unknwon label:#{label}" unless @labels.key?(label)
+          raise "unknwon label:#{label.inspect}" unless @labels.key?(label)
           @call_stack.push @index
           @index = @labels[label]
         in [:flow, :jump, label]
-          raise "unknwon label:#{label}" unless @labels.key?(label)
+          raise "unknwon label:#{label.inspect}" unless @labels.key?(label)
           @index = @labels[label]
         in [:flow, :jump_if_zero, label]
           @index = @labels[label] if @stack.pop == 0

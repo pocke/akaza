@@ -101,26 +101,11 @@ module Akaza
               commands << [:flow, :call, str_to_int(name, type: :method)]
             end
             opt[:skip_children] = true
-          in [:IF, cond, if_body, else_body] if if_body && else_body
-            else_label = str_to_int("else_#{next_label_index}", type: :condition)
-            end_label = str_to_int("end_#{next_label_index}", type: :condition)
-
-            eq_zero = -> (x) do
-              commands.concat(push_value(x))
-              commands << [:flow, :jump_if_zero, else_label]
-              commands.concat(ast_to_commands(else_body, main: false))
-              commands << [:flow, :jump, end_label]
-              commands << [:flow, :def, else_label]
-              commands.concat(ast_to_commands(if_body, main: false))
-              commands << [:flow, :def, end_label]
-            end
-
-            case cond
-            in [:OPCALL, [:LIT, 0], :==, [:ARRAY, x, nil]]
-              eq_zero.(x)
-            in [:OPCALL, x, :==, [:ARRAY, [:LIT, 0], nil]]
-              eq_zero.(x)
-            end
+          in [:IF, cond, if_body, else_body]
+            commands.concat(compile_if(cond, if_body, else_body))
+            opt[:skip_children] = true
+          in [:UNLESS, cond, else_body, if_body]
+            commands.concat(compile_if(cond, if_body, else_body))
             opt[:skip_children] = true
           end
         end
@@ -194,6 +179,31 @@ module Akaza
         in [:LVAR, name]
           commands << [:stack, :push, str_to_int(name, type: :variable)]
           commands << [:heap, :load]
+        end
+
+        commands
+      end
+
+      private def compile_if(cond, if_body, else_body)
+        commands = []
+        else_label = str_to_int("else_#{next_label_index}", type: :condition)
+        end_label = str_to_int("end_#{next_label_index}", type: :condition)
+
+        eq_zero = -> (x) do
+          commands.concat(push_value(x))
+          commands << [:flow, :jump_if_zero, else_label]
+          commands.concat(ast_to_commands(else_body, main: false)) if else_body
+          commands << [:flow, :jump, end_label]
+          commands << [:flow, :def, else_label]
+          commands.concat(ast_to_commands(if_body, main: false)) if if_body
+          commands << [:flow, :def, end_label]
+        end
+
+        case cond
+        in [:OPCALL, [:LIT, 0], :==, [:ARRAY, x, nil]]
+          eq_zero.(x)
+        in [:OPCALL, x, :==, [:ARRAY, [:LIT, 0], nil]]
+          eq_zero.(x)
         end
 
         commands
