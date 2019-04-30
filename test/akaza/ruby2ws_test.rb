@@ -16,6 +16,19 @@ class Ruby2wsTest < Minitest::Test
     assert_equal "a", out.string
   end
 
+  def test_transpile_putn_literal
+    ws = Akaza::Ruby2ws::Transpiler.new("put_as_number 42").transpile
+    out = StringIO.new
+    Akaza.eval(ws, output: out)
+    assert_equal "42", out.string
+  end
+
+  def test_transpile_putc_literal
+    ws = Akaza::Ruby2ws::Transpiler.new("put_as_char 'a'").transpile
+    out = StringIO.new
+    Akaza.eval(ws, output: out)
+    assert_equal "a", out.string
+  end
 
   # ruby_to_commands
 

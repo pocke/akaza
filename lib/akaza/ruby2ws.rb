@@ -7,6 +7,8 @@ module Akaza
   #   # output
   #   put_as_number n
   #   put_as_char ch
+  #   put_as_number 42
+  #   put_as_char 'a'
   #   puts "Hello, world!"
   #
   #   # input
@@ -31,6 +33,10 @@ module Akaza
   #   dup
   #   swap
   #   pop
+  #
+  #   # inline
+  #   inline "   "
+  #   inline {   }
   module Ruby2ws
     using AstExt
     SPACE = ' '
@@ -72,9 +78,19 @@ module Akaza
             current_commands << [:heap, :load]
             current_commands << [:io, :write_num]
             opt[:skip_children] = true
+          in [:FCALL, :put_as_number, [:ARRAY, [:LIT, num], nil]]
+            current_commands << [:stack, :push, num]
+            current_commands << [:io, :write_num]
+            opt[:skip_children] = true
           in [:FCALL, :put_as_char, [:ARRAY, [:LVAR, var], nil]]
             current_commands << [:stack, :push, str_to_int(var, type: :variable)]
             current_commands << [:heap, :load]
+            current_commands << [:io, :write_char]
+            opt[:skip_children] = true
+          in [:FCALL, :put_as_char, [:ARRAY, [:STR, str], nil]]
+            raise ParserError, "String size must be 1, but it's #{str} (#{str.size})" if str.size != 1
+
+            current_commands << [:stack, :push, str.ord]
             current_commands << [:io, :write_char]
             opt[:skip_children] = true
           in [:LASGN, var, [:LIT, num]]
