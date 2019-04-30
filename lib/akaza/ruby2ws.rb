@@ -9,7 +9,6 @@ module Akaza
   #   put_as_char ch
   #   put_as_number 42
   #   put_as_char 'a'
-  #   puts "Hello, world!"
   #
   #   # input
   #   num = get_as_number
@@ -27,16 +26,6 @@ module Akaza
   #   # heap
   #   x = 10
   #   push x
-  #
-  #   # stack
-  #   push 1
-  #   dup
-  #   swap
-  #   pop
-  #
-  #   # inline
-  #   inline "   "
-  #   inline {   }
   module Ruby2ws
     using AstExt
     SPACE = ' '
@@ -96,9 +85,7 @@ module Akaza
 
             methods << m
             opt[:skip_children] = true
-          in [:SCOPE, *_]
-            # skip
-          in [:BLOCK, *_]
+          in [:SCOPE, *_] | [:BLOCK, *_]
             # skip
           in [:VCALL, name]
             with_storing_lvars(lvars, commands) do
