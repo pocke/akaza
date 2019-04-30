@@ -154,6 +154,16 @@ module Akaza
             buf << NL << SPACE << NL << num_to_ws(label)
           in [:flow, :jump_if_neg, label]
             buf << NL << TAB << TAB << num_to_ws(label)
+          in [:calc, :add]
+            buf << TAB << SPACE << SPACE << SPACE
+          in [:calc, :sub]
+            buf << TAB << SPACE << SPACE << TAB
+          in [:calc, :multi]
+            buf << TAB << SPACE << SPACE << NL
+          in [:calc, :div]
+            buf << TAB << SPACE << TAB << SPACE
+          in [:calc, :mod]
+            buf << TAB << SPACE << TAB << TAB
           end
         end
         buf
@@ -202,6 +212,12 @@ module Akaza
           commands << [:io, :read_char]
           commands << [:stack, :push, tmp_var]
           commands << [:heap, :load]
+        in [:OPCALL, l, sym, [:ARRAY, r, nil]]
+          com = {'+': :add, '-': :sub, '*': :multi, '/': :div, '%': :mod}[sym]
+          raise ParserError, "Unknown symbol: #{sym}" unless com
+          commands.concat(push_value(l))
+          commands.concat(push_value(r))
+          commands << [:calc, com]
         end
 
         commands
@@ -220,10 +236,6 @@ module Akaza
           commands << [:flow, :def, else_label]
           commands.concat(ast_to_commands(if_body, main: false)) if if_body
           commands << [:flow, :def, end_label]
-        end
-
-        lt_zero = -> (x) do
-          commands.concat(push_value(x))
         end
 
         case cond

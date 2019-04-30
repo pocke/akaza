@@ -25,15 +25,25 @@ module Akaza
         in [:stack, :pop]
           @stack.pop
         in [:calc, :add]
-          @stack.push @stack.pop + @stack.pop
+          r = @stack.pop
+          l = @stack.pop
+          @stack.push l + r
         in [:calc, :sub]
-          @stack.push @stack.pop - @stack.pop
+          r = @stack.pop
+          l = @stack.pop
+          @stack.push l - r
         in [:calc, :multi]
-          @stack.push @stack.pop * @stack.pop
+          r = @stack.pop
+          l = @stack.pop
+          @stack.push l * r
         in [:calc, :div]
-          @stack.push @stack.pop / @stack.pop
+          r = @stack.pop
+          l = @stack.pop
+          @stack.push l / r
         in [:calc, :mod]
-          @stack.push @stack.pop % @stack.pop
+          r = @stack.pop
+          l = @stack.pop
+          @stack.push l % r
         in [:heap, :save]
           val = @stack.pop
           addr = @stack.pop

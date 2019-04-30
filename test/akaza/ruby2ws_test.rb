@@ -141,6 +141,36 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_add
+    assert_eval "5", <<~RUBY
+      put_as_number 3 + 2
+    RUBY
+  end
+
+  def test_transpile_sub
+    assert_eval "95", <<~RUBY
+      put_as_number 100 - 5
+    RUBY
+  end
+
+  def test_transpile_multi
+    assert_eval "24", <<~RUBY
+      put_as_number 3 * 8
+    RUBY
+  end
+
+  def test_transpile_div
+    assert_eval "2", <<~RUBY
+      put_as_number 4 / 2
+    RUBY
+  end
+
+  def test_transpile_mod
+    assert_eval "1", <<~RUBY
+      put_as_number 10 % 3
+    RUBY
+  end
+
   class AnyClass
     def initialize(klass)
       @klass = klass
