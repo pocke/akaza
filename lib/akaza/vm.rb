@@ -42,7 +42,7 @@ module Akaza
           addr = @stack.pop
           @stack.push @heap[addr]
         in [:flow, :def, label]
-          # does nothing
+          raise "Unreachable"
         in [:flow, :call, label]
           raise "unknwon label:#{label}" unless @labels.key?(label)
           @call_stack.push @index
@@ -77,7 +77,7 @@ module Akaza
       @commands.each.with_index do |command, index|
         case command
         in [:flow, :def, label]
-          @labels[label] = index - 1
+          @labels[label] = index
         else
           # skip
         end

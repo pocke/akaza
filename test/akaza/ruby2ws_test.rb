@@ -54,6 +54,17 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_def_args
+    assert_eval "42", <<~RUBY
+      def foo(x, y)
+        put_as_number x
+        put_as_number y
+      end
+
+      foo 4, 2
+    RUBY
+  end
+
   def test_transpile_lvar_to_lvar
     assert_eval "42", <<~RUBY
       x = 42

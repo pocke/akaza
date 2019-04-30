@@ -82,12 +82,19 @@ module Akaza
             commands << [:heap, :save]
             opt[:skip_children] = true
             lvars << var_addr
-          in [:DEFN, name, [:SCOPE, _, _, body]]
-            methods << [
+          in [:DEFN, name, [:SCOPE, lvar_table, [:ARGS, args_count ,*_], body]]
+            m = [
               [:flow, :def, str_to_int(name, type: :method)],
-              *ast_to_commands(body, method: true),
-              [:flow, :end],
             ]
+            lvar_table[0...args_count].reverse.each do |args_name|
+              m << [:stack, :push, str_to_int(args_name, type: :variable)]
+              m << [:stack, :swap]
+              m << [:heap, :save]
+            end
+            m.concat(ast_to_commands(body, method: true))
+            m << [:flow, :end]
+
+            methods << m
             opt[:skip_children] = true
           in [:SCOPE, *_]
             # skip
@@ -101,7 +108,7 @@ module Akaza
           in [:FCALL, name, [:ARRAY, *args, nil]]
             with_storing_lvars(lvars, commands) do
               args.each do |arg|
-                push_value(arg)
+                commands.concat(push_value(arg))
               end
               commands << [:flow, :call, str_to_int(name, type: :method)]
             end
@@ -109,7 +116,7 @@ module Akaza
           end
         end
 
-        commands += [[:flow, :exit]] unless method
+        commands << [:flow, :exit] unless method
         commands.concat(*methods)
         commands
       end
@@ -120,6 +127,8 @@ module Akaza
           case command
           in [:stack, :push, num]
             buf << SPACE << SPACE << num_to_ws(num)
+          in [:stack, :swap]
+            buf << SPACE << NL << TAB
           in [:heap, :save]
             buf << TAB << TAB << SPACE
           in [:heap, :load]
