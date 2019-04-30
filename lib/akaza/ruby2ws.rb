@@ -65,6 +65,8 @@ module Akaza
             commands.concat(push_value(arg))
             commands << [:io, :write_char]
             opt[:skip_children] = true
+          in [:VCALL, :exit]
+            commands << [:flow, :exit]
           in [:LASGN, var, arg]
             var_addr = str_to_int(var, type: :variable)
             commands << [:stack, :push, var_addr]

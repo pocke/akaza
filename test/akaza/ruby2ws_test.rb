@@ -133,6 +133,14 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_exit
+    assert_eval "42", <<~RUBY, StringIO.new("42\n24")
+      put_as_number 42
+      exit
+      put_as_number 42
+    RUBY
+  end
+
   class AnyClass
     def initialize(klass)
       @klass = klass
