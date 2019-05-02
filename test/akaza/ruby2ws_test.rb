@@ -265,6 +265,14 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_zarray
+    assert_eval "1", <<~RUBY
+      x = []
+      x.unshift 1
+      put_as_number x.shift
+    RUBY
+  end
+
   def assert_eval(expected_output, code, input = StringIO.new(''))
     ws = Akaza::Ruby2ws::Transpiler.new(code).transpile
     out = StringIO.new

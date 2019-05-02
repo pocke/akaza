@@ -324,6 +324,12 @@ module Akaza
           end
 
           commands << [:stack, :push, array_with_type(array_addr)]
+        in [:ZARRAY]
+          addr = next_addr_index
+          commands << [:stack, :push, addr]
+          commands << [:stack, :push, NONE_ADDR]
+          commands << [:heap, :save]
+          commands << [:stack, :push, array_with_type(addr)]
         end
 
         commands
