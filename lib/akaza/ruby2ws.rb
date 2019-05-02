@@ -34,6 +34,7 @@ module Akaza
     SPACE = ' '
     TAB = "\t"
     NL = "\n"
+    TMP_ADDR = 0
 
     class ParseError < StandardError; end
 
@@ -44,6 +45,8 @@ module Akaza
     class Transpiler
       def initialize(ruby_code)
         @ruby_code = ruby_code
+        @addr_index = 0
+        @addrs = {}
         @label_index = 0
       end
 
@@ -71,7 +74,7 @@ module Akaza
           in [:VCALL, :exit]
             commands << [:flow, :exit]
           in [:LASGN, var, arg]
-            var_addr = str_to_int(var, type: :variable)
+            var_addr = ident_to_addr(var)
             commands << [:stack, :push, var_addr]
             commands.concat(push_value(arg))
             commands << [:heap, :save]
@@ -82,7 +85,7 @@ module Akaza
               [:flow, :def, str_to_int(name, type: :method)],
             ]
             lvar_table[0...args_count].reverse.each do |args_name|
-              m << [:stack, :push, str_to_int(args_name, type: :variable)]
+              m << [:stack, :push, ident_to_addr(args_name)]
               m << [:stack, :swap]
               m << [:heap, :save]
             end
@@ -201,19 +204,17 @@ module Akaza
           check_char!(str)
           commands << [:stack, :push, str.ord]
         in [:LVAR, name]
-          commands << [:stack, :push, str_to_int(name, type: :variable)]
+          commands << [:stack, :push, ident_to_addr(name)]
           commands << [:heap, :load]
         in [:VCALL, :get_as_number]
-          tmp_var = str_to_int("__tmp", type: :variable)
-          commands << [:stack, :push, tmp_var]
+          commands << [:stack, :push, TMP_ADDR]
           commands << [:io, :read_num]
-          commands << [:stack, :push, tmp_var]
+          commands << [:stack, :push, TMP_ADDR]
           commands << [:heap, :load]
         in [:VCALL, :get_as_char]
-          tmp_var = str_to_int("__tmp", type: :variable)
-          commands << [:stack, :push, tmp_var]
+          commands << [:stack, :push, TMP_ADDR]
           commands << [:io, :read_char]
-          commands << [:stack, :push, tmp_var]
+          commands << [:stack, :push, TMP_ADDR]
           commands << [:heap, :load]
         in [:OPCALL, l, sym, [:ARRAY, r, nil]]
           com = {'+': :add, '-': :sub, '*': :multi, '/': :div, '%': :mod}[sym]
@@ -293,7 +294,6 @@ module Akaza
       private def str_to_int(str, type:)
         prefix =
           case type
-          when :variable  then 'v'
           when :method    then 'f'
           when :condition then 'c'
           else
@@ -314,6 +314,14 @@ module Akaza
 
       private def next_label_index
         @label_index += 1
+      end
+
+      private def next_addr_index
+        @addr_index += 1
+      end
+
+      private def ident_to_addr(ident)
+        @addrs[ident] ||= next_addr_index
       end
     end
   end
