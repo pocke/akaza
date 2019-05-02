@@ -187,6 +187,8 @@ module Akaza
           case command
           in [:stack, :push, num]
             buf << SPACE << SPACE << num_to_ws(num)
+          in [:stack, :pop]
+            buf << SPACE << NL << NL
           in [:stack, :swap]
             buf << SPACE << NL << TAB
           in [:stack, :dup]
@@ -247,6 +249,27 @@ module Akaza
         end
       end
 
+      # required stack: [count]
+      # the count in the stack will be modified by this method.
+      private def times(&block)
+        commands = []
+        end_label = ident_to_label(nil)
+        cond_label = ident_to_label(nil)
+
+        commands << [:flow, :def, cond_label]
+        commands << [:stack, :push, 1]
+        commands << [:calc, :sub]
+        commands << [:stack, :dup]
+        commands << [:flow, :jump_if_neg, end_label]
+
+        commands.concat(block.call)
+
+        commands << [:flow, :jump, cond_label]
+        commands << [:flow, :def, end_label]
+
+        commands
+      end
+
       private def compile_expr(ast)
         commands = []
 
@@ -303,6 +326,31 @@ module Akaza
 
           commands << [:heap, :load]
           # stack: [first_item]
+        in [:CALL, recv, :[], [:ARRAY, index, nil]]
+          end_label = ident_to_label(nil)
+          cond_label = ident_to_label(nil)
+
+          commands.concat(compile_expr(recv))
+          commands.concat(UNWRAP_COMMANDS)
+          commands << [:heap, :load]
+          commands.concat(compile_expr(index))
+          # stack: [addr_of_first_item, index]
+
+          commands.concat(UNWRAP_COMMANDS)
+          commands.concat(times do
+            c = []
+            c << [:stack, :swap]
+            # stack: [index, addr_of_first_item]
+            c << [:stack, :push, 1]
+            c << [:calc, :add]
+            c << [:heap, :load]
+            # stack: [index, addr_of_next_item]
+            c << [:stack, :swap]
+            c
+          end)
+          commands << [:stack, :pop]
+          # stack: [addr_of_the_target_item]
+          commands << [:heap, :load]
         in [:ARRAY, *items, nil]
           array_addr = next_addr_index
           addrs = ((items.size) * 2).times.map { next_addr_index }
