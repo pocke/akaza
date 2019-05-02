@@ -76,11 +76,11 @@ module Akaza
 
       def transpile
         ast = RubyVM::AbstractSyntaxTree.parse(@ruby_code)
-        commands = ast_to_commands(ast, main: true)
+        commands = compile_stmt(ast, main: true)
         commands_to_ws(commands)
       end
 
-      private def ast_to_commands(ast, main:)
+      private def compile_stmt(ast, main:)
         commands = []
         methods = []
         lvars = []
@@ -88,12 +88,12 @@ module Akaza
         ast.traverse do |node, opt|
           case node
           in [:FCALL, :put_as_number, [:ARRAY, arg, nil]]
-            commands.concat(compile_value(arg))
+            commands.concat(compile_expr(arg))
             commands.concat(UNWRAP_COMMANDS)
             commands << [:io, :write_num]
             opt[:skip_children] = true
           in [:FCALL, :put_as_char, [:ARRAY, arg, nil]]
-            commands.concat(compile_value(arg))
+            commands.concat(compile_expr(arg))
             commands.concat(UNWRAP_COMMANDS)
             commands << [:io, :write_char]
             opt[:skip_children] = true
@@ -102,7 +102,7 @@ module Akaza
           in [:LASGN, var, arg]
             var_addr = ident_to_addr(var)
             commands << [:stack, :push, var_addr]
-            commands.concat(compile_value(arg))
+            commands.concat(compile_expr(arg))
             commands << [:heap, :save]
             opt[:skip_children] = true
             lvars << var_addr
@@ -115,7 +115,7 @@ module Akaza
               m << [:stack, :swap]
               m << [:heap, :save]
             end
-            m.concat(ast_to_commands(body, main: false))
+            m.concat(compile_stmt(body, main: false))
             m << [:flow, :end]
 
             methods << m
@@ -130,7 +130,7 @@ module Akaza
           in [:FCALL, name, [:ARRAY, *args, nil]]
             with_storing_lvars(lvars, commands) do
               args.each do |arg|
-                commands.concat(compile_value(arg))
+                commands.concat(compile_expr(arg))
               end
               commands << [:flow, :call, ident_to_label(name)]
             end
@@ -220,7 +220,7 @@ module Akaza
         end
       end
 
-      private def compile_value(ast)
+      private def compile_expr(ast)
         commands = []
 
         case ast
@@ -247,9 +247,9 @@ module Akaza
         in [:OPCALL, l, sym, [:ARRAY, r, nil]]
           com = {'+': :add, '-': :sub, '*': :multi, '/': :div, '%': :mod}[sym]
           raise ParserError, "Unknown symbol: #{sym}" unless com
-          commands.concat(compile_value(l))
+          commands.concat(compile_expr(l))
           commands.concat(UNWRAP_COMMANDS)
-          commands.concat(compile_value(r))
+          commands.concat(compile_expr(r))
           commands.concat(UNWRAP_COMMANDS)
           commands << [:calc, com]
           commands.concat(WRAP_NUMBER_COMMANDS)
@@ -258,7 +258,7 @@ module Akaza
           items.each.with_index do |item, index|
             value_addr = addrs[index * 2]
             commands << [:stack, :push, value_addr]
-            commands.concat(compile_value(item))
+            commands.concat(compile_expr(item))
             commands << [:heap, :save]
 
             next_addr = addrs[index * 2 + 1]
@@ -279,13 +279,13 @@ module Akaza
         end_label = ident_to_label(nil)
 
         body = -> (x, sym) do
-          commands.concat(compile_value(x))
+          commands.concat(compile_expr(x))
           commands.concat(UNWRAP_COMMANDS)
           commands << [:flow, sym, else_label]
-          commands.concat(ast_to_commands(else_body, main: false)) if else_body
+          commands.concat(compile_stmt(else_body, main: false)) if else_body
           commands << [:flow, :jump, end_label]
           commands << [:flow, :def, else_label]
-          commands.concat(ast_to_commands(if_body, main: false)) if if_body
+          commands.concat(compile_stmt(if_body, main: false)) if if_body
           commands << [:flow, :def, end_label]
         end
 
@@ -311,12 +311,12 @@ module Akaza
 
         make_body = -> (x, sym) do
           commands << [:flow, :def, cond_label]
-          commands.concat(compile_value(x))
+          commands.concat(compile_expr(x))
           commands.concat(UNWRAP_COMMANDS)
           commands << [:flow, sym, body_label]
           commands << [:flow, :jump, end_label]
           commands << [:flow, :def, body_label]
-          commands.concat(ast_to_commands(body, main: false))
+          commands.concat(compile_stmt(body, main: false))
           commands << [:flow, :jump, cond_label]
           commands << [:flow, :def, end_label]
         end
