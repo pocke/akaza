@@ -45,9 +45,12 @@ module Akaza
     class Transpiler
       def initialize(ruby_code)
         @ruby_code = ruby_code
+
         @addr_index = 0
         @addrs = {}
+
         @label_index = 0
+        @labels = {}
       end
 
       def transpile
@@ -82,7 +85,7 @@ module Akaza
             lvars << var_addr
           in [:DEFN, name, [:SCOPE, lvar_table, [:ARGS, args_count ,*_], body]]
             m = [
-              [:flow, :def, str_to_int(name, type: :method)],
+              [:flow, :def, ident_to_label(name)],
             ]
             lvar_table[0...args_count].reverse.each do |args_name|
               m << [:stack, :push, ident_to_addr(args_name)]
@@ -98,7 +101,7 @@ module Akaza
             # skip
           in [:VCALL, name]
             with_storing_lvars(lvars, commands) do
-              commands << [:flow, :call, str_to_int(name, type: :method)]
+              commands << [:flow, :call, ident_to_label(name)]
             end
             opt[:skip_children] = true
           in [:FCALL, name, [:ARRAY, *args, nil]]
@@ -106,7 +109,7 @@ module Akaza
               args.each do |arg|
                 commands.concat(push_value(arg))
               end
-              commands << [:flow, :call, str_to_int(name, type: :method)]
+              commands << [:flow, :call, ident_to_label(name)]
             end
             opt[:skip_children] = true
           in [:IF, cond, if_body, else_body]
@@ -229,8 +232,8 @@ module Akaza
 
       private def compile_if(cond, if_body, else_body)
         commands = []
-        else_label = str_to_int("else_#{next_label_index}", type: :condition)
-        end_label = str_to_int("end_#{next_label_index}", type: :condition)
+        else_label = ident_to_label(nil)
+        end_label = ident_to_label(nil)
 
         body = -> (x, sym) do
           commands.concat(push_value(x))
@@ -258,9 +261,9 @@ module Akaza
 
       private def compile_while(cond, body)
         commands = []
-        cond_label = str_to_int("cond_#{next_label_index}", type: :condition)
-        body_label = str_to_int("body_#{next_label_index}", type: :condition)
-        end_label = str_to_int("end_#{next_label_index}", type: :condition)
+        cond_label = ident_to_label(nil)
+        body_label = ident_to_label(nil)
+        end_label = ident_to_label(nil)
 
         make_body = -> (x, sym) do
           commands << [:flow, :def, cond_label]
@@ -291,17 +294,6 @@ module Akaza
         raise ParserError, "String size must be 1, but it's #{char} (#{char.size})" if char.size != 1
       end
 
-      private def str_to_int(str, type:)
-        prefix =
-          case type
-          when :method    then 'f'
-          when :condition then 'c'
-          else
-            raise "Unknown type: #{type}"
-          end
-        "#{prefix}_#{str}".bytes.inject { |a, b| (a << 8) + b }
-      end
-
       private def num_to_ws(num)
         sign =
           if num < 0
@@ -314,6 +306,14 @@ module Akaza
 
       private def next_label_index
         @label_index += 1
+      end
+
+      private def ident_to_label(ident)
+        if ident
+          @labels[ident] ||= next_label_index
+        else
+          next_label_index
+        end
       end
 
       private def next_addr_index
