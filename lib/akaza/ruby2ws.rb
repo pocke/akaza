@@ -47,13 +47,18 @@ module Akaza
     # Call when stack top is the target number.
     UNWRAP_COMMANDS = [
       [:stack, :push, 2 ** TYPE_BITS],
-      # [:stack, :swap],
       [:calc, :div],
     ].freeze
     WRAP_NUMBER_COMMANDS = [
       [:stack, :push, 2 ** TYPE_BITS],
       [:calc, :multi],
       [:stack, :push, TYPE_INT],
+      [:calc, :add],
+    ].freeze
+    WRAP_ARRAY_COMMANDS = [
+      [:stack, :push, 2 ** TYPE_BITS],
+      [:calc, :multi],
+      [:stack, :push, TYPE_ARRAY],
       [:calc, :add],
     ].freeze
 
@@ -160,6 +165,8 @@ module Akaza
             buf << SPACE << SPACE << num_to_ws(num)
           in [:stack, :swap]
             buf << SPACE << NL << TAB
+          in [:stack, :dup]
+            buf << SPACE << NL << SPACE
           in [:heap, :save]
             buf << TAB << TAB << SPACE
           in [:heap, :load]
@@ -253,6 +260,26 @@ module Akaza
           commands.concat(UNWRAP_COMMANDS)
           commands << [:calc, com]
           commands.concat(WRAP_NUMBER_COMMANDS)
+        in [:CALL, [:LVAR, lvar_name], :shift, nil]
+          lvar_addr = ident_to_addr(lvar_name)
+          commands << [:stack, :push, lvar_addr]
+          commands << [:heap, :load]
+
+          commands.concat(UNWRAP_COMMANDS)
+          # Load the first value of the array to bottom of the stack
+          commands << [:stack ,:dup]
+          commands << [:heap, :load]
+          commands << [:stack, :swap]
+
+          # Load the next address
+          commands << [:stack, :push, 1]
+          commands << [:calc, :add]
+          commands << [:heap, :load]
+
+          # Update lvar
+          commands << [:stack, :push, lvar_addr]
+          commands << [:stack, :swap]
+          commands << [:heap, :save]
         in [:ARRAY, *items, nil]
           addrs = ((items.size) * 2).times.map { next_addr_index }
           items.each.with_index do |item, index|
@@ -262,7 +289,7 @@ module Akaza
             commands << [:heap, :save]
 
             next_addr = addrs[index * 2 + 1]
-            val = addrs[(index + 1) * 2 + 1] || NONE_ADDR
+            val = addrs[(index + 1) * 2] || NONE_ADDR
             commands << [:stack, :push, next_addr]
             commands << [:stack, :push, array_with_type(val)]
             commands << [:heap, :save]
