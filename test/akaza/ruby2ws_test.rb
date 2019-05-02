@@ -282,6 +282,18 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_array_index_assign
+    assert_eval '5711', <<~RUBY
+      x = [1, 2, 3]
+      x[0] = 5
+      x[1] = 7
+      x[2] = 11
+      put_as_number x[0]
+      put_as_number x[1]
+      put_as_number x[2]
+    RUBY
+  end
+
   def assert_eval(expected_output, code, input = StringIO.new(''))
     ws = Akaza::Ruby2ws::Transpiler.new(code).transpile
     out = StringIO.new

@@ -111,6 +111,31 @@ module Akaza
             commands << [:heap, :save]
             opt[:skip_children] = true
             lvars << var_addr
+          in [:ATTRASGN, recv, :[]=, [:ARRAY, index, value, nil]]
+            commands.concat(compile_expr(recv))
+            commands.concat(UNWRAP_COMMANDS)
+            commands << [:heap, :load]
+            commands.concat(compile_expr(index))
+            # stack: [addr_of_first_item, index]
+
+            commands.concat(UNWRAP_COMMANDS)
+            commands.concat(times do
+              c = []
+              c << [:stack, :swap]
+              # stack: [index, addr_of_first_item]
+              c << [:stack, :push, 1]
+              c << [:calc, :add]
+              c << [:heap, :load]
+              # stack: [index, addr_of_next_item]
+              c << [:stack, :swap]
+              c
+            end)
+            commands << [:stack, :pop]
+            # stack: [addr_of_the_target_item]
+
+            commands.concat(compile_expr(value))
+            commands << [:heap, :save]
+            opt[:skip_children] = true
           in [:DEFN, name, [:SCOPE, lvar_table, [:ARGS, args_count ,*_], body]]
             m = [
               [:flow, :def, ident_to_label(name)],
@@ -327,9 +352,6 @@ module Akaza
           commands << [:heap, :load]
           # stack: [first_item]
         in [:CALL, recv, :[], [:ARRAY, index, nil]]
-          end_label = ident_to_label(nil)
-          cond_label = ident_to_label(nil)
-
           commands.concat(compile_expr(recv))
           commands.concat(UNWRAP_COMMANDS)
           commands << [:heap, :load]
