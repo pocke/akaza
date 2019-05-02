@@ -31,10 +31,36 @@ module Akaza
   #   push x
   module Ruby2ws
     using AstExt
+
     SPACE = ' '
     TAB = "\t"
     NL = "\n"
-    TMP_ADDR = 0
+
+    NONE_ADDR = 0
+    TMP_ADDR = 1
+
+    TYPE_BITS = 2
+
+    TYPE_INT   = 0b01
+    TYPE_ARRAY = 0b10
+
+    # Call when stack top is the target number.
+    UNWRAP_COMMANDS = [
+      [:stack, :push, 2 ** TYPE_BITS],
+      [:calc, :div],
+    ].freeze
+    WRAP_NUMBER_COMMANDS = [
+      [:stack, :push, 2 ** TYPE_BITS],
+      [:calc, :multi],
+      [:stack, :push, TYPE_INT],
+      [:calc, :add],
+    ].freeze
+    WRAP_ARRAY_COMMANDS = [
+      [:stack, :push, 2 ** TYPE_BITS],
+      [:calc, :multi],
+      [:stack, :push, TYPE_ARRAY],
+      [:calc, :add],
+    ].freeze
 
     class ParseError < StandardError; end
 
@@ -46,7 +72,7 @@ module Akaza
       def initialize(ruby_code)
         @ruby_code = ruby_code
 
-        @addr_index = 0
+        @addr_index = 1
         @addrs = {}
 
         @label_index = 0
@@ -55,11 +81,11 @@ module Akaza
 
       def transpile
         ast = RubyVM::AbstractSyntaxTree.parse(@ruby_code)
-        commands = ast_to_commands(ast, main: true)
+        commands = compile_stmt(ast, main: true)
         commands_to_ws(commands)
       end
 
-      private def ast_to_commands(ast, main:)
+      private def compile_stmt(ast, main:)
         commands = []
         methods = []
         lvars = []
@@ -67,11 +93,13 @@ module Akaza
         ast.traverse do |node, opt|
           case node
           in [:FCALL, :put_as_number, [:ARRAY, arg, nil]]
-            commands.concat(push_value(arg))
+            commands.concat(compile_expr(arg))
+            commands.concat(UNWRAP_COMMANDS)
             commands << [:io, :write_num]
             opt[:skip_children] = true
           in [:FCALL, :put_as_char, [:ARRAY, arg, nil]]
-            commands.concat(push_value(arg))
+            commands.concat(compile_expr(arg))
+            commands.concat(UNWRAP_COMMANDS)
             commands << [:io, :write_char]
             opt[:skip_children] = true
           in [:VCALL, :exit]
@@ -79,10 +107,35 @@ module Akaza
           in [:LASGN, var, arg]
             var_addr = ident_to_addr(var)
             commands << [:stack, :push, var_addr]
-            commands.concat(push_value(arg))
+            commands.concat(compile_expr(arg))
             commands << [:heap, :save]
             opt[:skip_children] = true
             lvars << var_addr
+          in [:ATTRASGN, recv, :[]=, [:ARRAY, index, value, nil]]
+            commands.concat(compile_expr(recv))
+            commands.concat(UNWRAP_COMMANDS)
+            commands << [:heap, :load]
+            commands.concat(compile_expr(index))
+            # stack: [addr_of_first_item, index]
+
+            commands.concat(UNWRAP_COMMANDS)
+            commands.concat(times do
+              c = []
+              c << [:stack, :swap]
+              # stack: [index, addr_of_first_item]
+              c << [:stack, :push, 1]
+              c << [:calc, :add]
+              c << [:heap, :load]
+              # stack: [index, addr_of_next_item]
+              c << [:stack, :swap]
+              c
+            end)
+            commands << [:stack, :pop]
+            # stack: [addr_of_the_target_item]
+
+            commands.concat(compile_expr(value))
+            commands << [:heap, :save]
+            opt[:skip_children] = true
           in [:DEFN, name, [:SCOPE, lvar_table, [:ARGS, args_count ,*_], body]]
             m = [
               [:flow, :def, ident_to_label(name)],
@@ -92,7 +145,7 @@ module Akaza
               m << [:stack, :swap]
               m << [:heap, :save]
             end
-            m.concat(ast_to_commands(body, main: false))
+            m.concat(compile_stmt(body, main: false))
             m << [:flow, :end]
 
             methods << m
@@ -107,10 +160,34 @@ module Akaza
           in [:FCALL, name, [:ARRAY, *args, nil]]
             with_storing_lvars(lvars, commands) do
               args.each do |arg|
-                commands.concat(push_value(arg))
+                commands.concat(compile_expr(arg))
               end
               commands << [:flow, :call, ident_to_label(name)]
             end
+            opt[:skip_children] = true
+          in [:CALL, recv, :unshift, [:ARRAY, expr, nil]]
+            commands.concat(compile_expr(recv))
+            commands.concat(UNWRAP_COMMANDS)
+            # stack: [unwrapped_addr_of_array]
+
+            commands << [:stack, :dup]
+            commands << [:heap, :load]
+            # stack: [unwrapped_addr_of_array, addr_of_first_item]
+
+            # Allocate a new item
+            new_item_value_addr = next_addr_index
+            new_item_addr_addr = next_addr_index
+            commands << [:stack, :push, new_item_value_addr]
+            commands.concat(compile_expr(expr))
+            commands << [:heap, :save]
+            commands << [:stack, :push, new_item_addr_addr]
+            commands << [:stack, :swap]
+            commands << [:heap, :save]
+            # stack: [unwrapped_addr_of_array]
+
+            commands << [:stack, :push, new_item_value_addr]
+            commands << [:heap, :save]
+
             opt[:skip_children] = true
           in [:IF, cond, if_body, else_body]
             commands.concat(compile_if(cond, if_body, else_body))
@@ -135,8 +212,12 @@ module Akaza
           case command
           in [:stack, :push, num]
             buf << SPACE << SPACE << num_to_ws(num)
+          in [:stack, :pop]
+            buf << SPACE << NL << NL
           in [:stack, :swap]
             buf << SPACE << NL << TAB
+          in [:stack, :dup]
+            buf << SPACE << NL << SPACE
           in [:heap, :save]
             buf << TAB << TAB << SPACE
           in [:heap, :load]
@@ -184,10 +265,6 @@ module Akaza
           commands << [:stack, :push, var_addr]
           commands << [:stack, :push, var_addr]
           commands << [:heap, :load]
-          # Fill zero
-          commands << [:stack, :push, var_addr]
-          commands << [:stack, :push, 0]
-          commands << [:heap, :save]
         end
 
         block.call
@@ -197,15 +274,36 @@ module Akaza
         end
       end
 
-      private def push_value(ast)
+      # required stack: [count]
+      # the count in the stack will be modified by this method.
+      private def times(&block)
+        commands = []
+        end_label = ident_to_label(nil)
+        cond_label = ident_to_label(nil)
+
+        commands << [:flow, :def, cond_label]
+        commands << [:stack, :push, 1]
+        commands << [:calc, :sub]
+        commands << [:stack, :dup]
+        commands << [:flow, :jump_if_neg, end_label]
+
+        commands.concat(block.call)
+
+        commands << [:flow, :jump, cond_label]
+        commands << [:flow, :def, end_label]
+
+        commands
+      end
+
+      private def compile_expr(ast)
         commands = []
 
         case ast
         in [:LIT, num]
-          commands << [:stack, :push, num]
+          commands << [:stack, :push, num_with_type(num)]
         in [:STR, str]
           check_char!(str)
-          commands << [:stack, :push, str.ord]
+          commands << [:stack, :push, num_with_type(str.ord)]
         in [:LVAR, name]
           commands << [:stack, :push, ident_to_addr(name)]
           commands << [:heap, :load]
@@ -214,17 +312,94 @@ module Akaza
           commands << [:io, :read_num]
           commands << [:stack, :push, TMP_ADDR]
           commands << [:heap, :load]
+          commands.concat(WRAP_NUMBER_COMMANDS)
         in [:VCALL, :get_as_char]
           commands << [:stack, :push, TMP_ADDR]
           commands << [:io, :read_char]
           commands << [:stack, :push, TMP_ADDR]
           commands << [:heap, :load]
+          commands.concat(WRAP_NUMBER_COMMANDS)
         in [:OPCALL, l, sym, [:ARRAY, r, nil]]
           com = {'+': :add, '-': :sub, '*': :multi, '/': :div, '%': :mod}[sym]
           raise ParserError, "Unknown symbol: #{sym}" unless com
-          commands.concat(push_value(l))
-          commands.concat(push_value(r))
+          commands.concat(compile_expr(l))
+          commands.concat(UNWRAP_COMMANDS)
+          commands.concat(compile_expr(r))
+          commands.concat(UNWRAP_COMMANDS)
           commands << [:calc, com]
+          commands.concat(WRAP_NUMBER_COMMANDS)
+        in [:CALL, expr, :shift, nil]
+          commands.concat(compile_expr(expr))
+          commands.concat(UNWRAP_COMMANDS)
+          # stack: [unwrapped_addr_of_array]
+
+          commands << [:stack, :dup]
+          commands << [:heap, :load]
+          # stack: [unwrapped_addr_of_array, addr_of_first_item]
+          commands << [:stack, :swap]
+          commands << [:stack, :dup]
+          commands << [:heap, :load]
+          # stack: [addr_of_first_item, unwrapped_addr_of_array, addr_of_first_item]
+
+          commands << [:stack, :push, 1]
+          commands << [:calc, :add]
+          commands << [:heap, :load]
+          # stack: [addr_of_first_item, unwrapped_addr_of_array, addr_of_second_item]
+
+          commands << [:heap, :save]
+          # stack: [addr_of_first_item]
+
+          commands << [:heap, :load]
+          # stack: [first_item]
+        in [:CALL, recv, :[], [:ARRAY, index, nil]]
+          commands.concat(compile_expr(recv))
+          commands.concat(UNWRAP_COMMANDS)
+          commands << [:heap, :load]
+          commands.concat(compile_expr(index))
+          # stack: [addr_of_first_item, index]
+
+          commands.concat(UNWRAP_COMMANDS)
+          commands.concat(times do
+            c = []
+            c << [:stack, :swap]
+            # stack: [index, addr_of_first_item]
+            c << [:stack, :push, 1]
+            c << [:calc, :add]
+            c << [:heap, :load]
+            # stack: [index, addr_of_next_item]
+            c << [:stack, :swap]
+            c
+          end)
+          commands << [:stack, :pop]
+          # stack: [addr_of_the_target_item]
+          commands << [:heap, :load]
+        in [:ARRAY, *items, nil]
+          array_addr = next_addr_index
+          addrs = ((items.size) * 2).times.map { next_addr_index }
+          commands << [:stack, :push, array_addr]
+          commands << [:stack, :push, addrs[0] || NONE_ADDR]
+          commands << [:heap, :save]
+
+          items.each.with_index do |item, index|
+            value_addr = addrs[index * 2]
+            commands << [:stack, :push, value_addr]
+            commands.concat(compile_expr(item))
+            commands << [:heap, :save]
+
+            next_addr = addrs[index * 2 + 1]
+            val = addrs[(index + 1) * 2] || NONE_ADDR
+            commands << [:stack, :push, next_addr]
+            commands << [:stack, :push, val]
+            commands << [:heap, :save]
+          end
+
+          commands << [:stack, :push, array_with_type(array_addr)]
+        in [:ZARRAY]
+          addr = next_addr_index
+          commands << [:stack, :push, addr]
+          commands << [:stack, :push, NONE_ADDR]
+          commands << [:heap, :save]
+          commands << [:stack, :push, array_with_type(addr)]
         end
 
         commands
@@ -236,12 +411,13 @@ module Akaza
         end_label = ident_to_label(nil)
 
         body = -> (x, sym) do
-          commands.concat(push_value(x))
+          commands.concat(compile_expr(x))
+          commands.concat(UNWRAP_COMMANDS)
           commands << [:flow, sym, else_label]
-          commands.concat(ast_to_commands(else_body, main: false)) if else_body
+          commands.concat(compile_stmt(else_body, main: false)) if else_body
           commands << [:flow, :jump, end_label]
           commands << [:flow, :def, else_label]
-          commands.concat(ast_to_commands(if_body, main: false)) if if_body
+          commands.concat(compile_stmt(if_body, main: false)) if if_body
           commands << [:flow, :def, end_label]
         end
 
@@ -267,11 +443,12 @@ module Akaza
 
         make_body = -> (x, sym) do
           commands << [:flow, :def, cond_label]
-          commands.concat(push_value(x))
+          commands.concat(compile_expr(x))
+          commands.concat(UNWRAP_COMMANDS)
           commands << [:flow, sym, body_label]
           commands << [:flow, :jump, end_label]
           commands << [:flow, :def, body_label]
-          commands.concat(ast_to_commands(body, main: false))
+          commands.concat(compile_stmt(body, main: false))
           commands << [:flow, :jump, cond_label]
           commands << [:flow, :def, end_label]
         end
@@ -322,6 +499,14 @@ module Akaza
 
       private def ident_to_addr(ident)
         @addrs[ident] ||= next_addr_index
+      end
+
+      private def num_with_type(num)
+        (num << TYPE_BITS) + TYPE_INT
+      end
+
+      private def array_with_type(array_addr)
+        (array_addr << TYPE_BITS) + TYPE_ARRAY
       end
     end
   end

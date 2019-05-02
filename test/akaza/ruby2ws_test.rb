@@ -229,18 +229,69 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
-  class AnyClass
-    def initialize(klass)
-      @klass = klass
-    end
-
-    def ==(right)
-      right.is_a? @klass
-    end
+  def test_transpile_array_shift
+    assert_eval "123", <<~RUBY
+      addr = [1, 2, 3]
+      addr2 = addr
+      put_as_number addr.shift
+      put_as_number addr2.shift
+      put_as_number addr.shift
+    RUBY
   end
 
-  def any(klass)
-    AnyClass.new(klass)
+  def test_transpile_array_unshift
+    assert_eval "123", <<~RUBY
+      addr = [3]
+      addr2 = addr
+      addr2.unshift 2
+      addr.unshift 1
+
+      put_as_number addr.shift
+      put_as_number addr.shift
+      put_as_number addr.shift
+    RUBY
+  end
+
+  def test_transpile_array_def
+    assert_eval "123", <<~RUBY
+      def shift(array)
+        put_as_number array.shift
+      end
+
+      array = [1, 2, 3]
+      put_as_number array.shift
+      shift array
+      put_as_number array.shift
+    RUBY
+  end
+
+  def test_transpile_zarray
+    assert_eval "1", <<~RUBY
+      x = []
+      x.unshift 1
+      put_as_number x.shift
+    RUBY
+  end
+
+  def test_transpile_array_index_access
+    assert_eval '321', <<~RUBY
+      x = [1, 2, 3]
+      put_as_number x[2]
+      put_as_number x[1]
+      put_as_number x[0]
+    RUBY
+  end
+
+  def test_transpile_array_index_assign
+    assert_eval '5711', <<~RUBY
+      x = [1, 2, 3]
+      x[0] = 5
+      x[1] = 7
+      x[2] = 11
+      put_as_number x[0]
+      put_as_number x[1]
+      put_as_number x[2]
+    RUBY
   end
 
   def assert_eval(expected_output, code, input = StringIO.new(''))
