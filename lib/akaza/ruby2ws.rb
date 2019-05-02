@@ -140,6 +140,14 @@ module Akaza
               commands << [:flow, :call, ident_to_label(name)]
             end
             opt[:skip_children] = true
+          in [:CALL, [:LVAR, lvar_name], :unshift, [:ARRAY, expr, nil]]
+            lvar_addr = ident_to_addr(lvar_name)
+            commands << [:stack, :push, lvar_addr]
+            commands << [:heap, :load]
+            commands.concat(UNWRAP_COMMANDS)
+
+            # TODO
+            opt[:skip_children] = true
           in [:IF, cond, if_body, else_body]
             commands.concat(compile_if(cond, if_body, else_body))
             opt[:skip_children] = true
@@ -260,28 +268,36 @@ module Akaza
           commands.concat(UNWRAP_COMMANDS)
           commands << [:calc, com]
           commands.concat(WRAP_NUMBER_COMMANDS)
-        in [:CALL, [:LVAR, lvar_name], :shift, nil]
-          lvar_addr = ident_to_addr(lvar_name)
-          commands << [:stack, :push, lvar_addr]
-          commands << [:heap, :load]
-
+        in [:CALL, expr, :shift, nil]
+          commands.concat(compile_expr(expr))
           commands.concat(UNWRAP_COMMANDS)
-          # Load the first value of the array to bottom of the stack
-          commands << [:stack ,:dup]
-          commands << [:heap, :load]
-          commands << [:stack, :swap]
+          # stack: [unwrapped_addr_of_array]
 
-          # Load the next address
+          commands << [:stack, :dup]
+          commands << [:heap, :load]
+          # stack: [unwrapped_addr_of_array, addr_of_first_item]
+          commands << [:stack, :swap]
+          commands << [:stack, :dup]
+          commands << [:heap, :load]
+          # stack: [addr_of_first_item, unwrapped_addr_of_array, addr_of_first_item]
+
           commands << [:stack, :push, 1]
           commands << [:calc, :add]
           commands << [:heap, :load]
+          # stack: [addr_of_first_item, unwrapped_addr_of_array, addr_of_second_item]
 
-          # Update lvar
-          commands << [:stack, :push, lvar_addr]
-          commands << [:stack, :swap]
           commands << [:heap, :save]
+          # stack: [addr_of_first_item]
+
+          commands << [:heap, :load]
+          # stack: [first_item]
         in [:ARRAY, *items, nil]
+          array_addr = next_addr_index
           addrs = ((items.size) * 2).times.map { next_addr_index }
+          commands << [:stack, :push, array_addr]
+          commands << [:stack, :push, addrs[0] || NONE_ADDR]
+          commands << [:heap, :save]
+
           items.each.with_index do |item, index|
             value_addr = addrs[index * 2]
             commands << [:stack, :push, value_addr]
@@ -291,10 +307,11 @@ module Akaza
             next_addr = addrs[index * 2 + 1]
             val = addrs[(index + 1) * 2] || NONE_ADDR
             commands << [:stack, :push, next_addr]
-            commands << [:stack, :push, array_with_type(val)]
+            commands << [:stack, :push, val]
             commands << [:heap, :save]
           end
-          commands << [:stack, :push, array_with_type(addrs[0])]
+
+          commands << [:stack, :push, array_with_type(array_addr)]
         end
 
         commands

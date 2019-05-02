@@ -232,8 +232,9 @@ class Ruby2wsTest < Minitest::Test
   def test_transpile_array
     assert_eval "123", <<~RUBY
       addr = [1, 2, 3]
+      addr2 = addr
       put_as_number addr.shift
-      put_as_number addr.shift
+      put_as_number addr2.shift
       put_as_number addr.shift
     RUBY
   end
