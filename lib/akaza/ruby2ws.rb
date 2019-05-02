@@ -140,13 +140,29 @@ module Akaza
               commands << [:flow, :call, ident_to_label(name)]
             end
             opt[:skip_children] = true
-          in [:CALL, [:LVAR, lvar_name], :unshift, [:ARRAY, expr, nil]]
-            lvar_addr = ident_to_addr(lvar_name)
-            commands << [:stack, :push, lvar_addr]
-            commands << [:heap, :load]
+          in [:CALL, recv, :unshift, [:ARRAY, expr, nil]]
+            commands.concat(compile_expr(recv))
             commands.concat(UNWRAP_COMMANDS)
+            # stack: [unwrapped_addr_of_array]
 
-            # TODO
+            commands << [:stack, :dup]
+            commands << [:heap, :load]
+            # stack: [unwrapped_addr_of_array, addr_of_first_item]
+
+            # Allocate a new item
+            new_item_value_addr = next_addr_index
+            new_item_addr_addr = next_addr_index
+            commands << [:stack, :push, new_item_value_addr]
+            commands.concat(compile_expr(expr))
+            commands << [:heap, :save]
+            commands << [:stack, :push, new_item_addr_addr]
+            commands << [:stack, :swap]
+            commands << [:heap, :save]
+            # stack: [unwrapped_addr_of_array]
+
+            commands << [:stack, :push, new_item_value_addr]
+            commands << [:heap, :save]
+
             opt[:skip_children] = true
           in [:IF, cond, if_body, else_body]
             commands.concat(compile_if(cond, if_body, else_body))
