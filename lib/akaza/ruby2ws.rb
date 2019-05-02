@@ -31,10 +31,28 @@ module Akaza
   #   push x
   module Ruby2ws
     using AstExt
+
     SPACE = ' '
     TAB = "\t"
     NL = "\n"
+
     TMP_ADDR = 0
+
+    TYPE_BITS = 2
+    TYPE_INT = 1
+
+    # Call when stack top is the target number.
+    UNWRAP_COMMANDS = [
+      [:stack, :push, 2 ** TYPE_BITS],
+      # [:stack, :swap],
+      [:calc, :div],
+    ].freeze
+    WRAP_NUMBER_COMMANDS = [
+      [:stack, :push, 2 ** TYPE_BITS],
+      [:calc, :multi],
+      [:stack, :push, TYPE_INT],
+      [:calc, :add],
+    ].freeze
 
     class ParseError < StandardError; end
 
@@ -67,11 +85,13 @@ module Akaza
         ast.traverse do |node, opt|
           case node
           in [:FCALL, :put_as_number, [:ARRAY, arg, nil]]
-            commands.concat(push_value(arg))
+            commands.concat(compile_value(arg))
+            commands.concat(UNWRAP_COMMANDS)
             commands << [:io, :write_num]
             opt[:skip_children] = true
           in [:FCALL, :put_as_char, [:ARRAY, arg, nil]]
-            commands.concat(push_value(arg))
+            commands.concat(compile_value(arg))
+            commands.concat(UNWRAP_COMMANDS)
             commands << [:io, :write_char]
             opt[:skip_children] = true
           in [:VCALL, :exit]
@@ -79,7 +99,7 @@ module Akaza
           in [:LASGN, var, arg]
             var_addr = ident_to_addr(var)
             commands << [:stack, :push, var_addr]
-            commands.concat(push_value(arg))
+            commands.concat(compile_value(arg))
             commands << [:heap, :save]
             opt[:skip_children] = true
             lvars << var_addr
@@ -107,7 +127,7 @@ module Akaza
           in [:FCALL, name, [:ARRAY, *args, nil]]
             with_storing_lvars(lvars, commands) do
               args.each do |arg|
-                commands.concat(push_value(arg))
+                commands.concat(compile_value(arg))
               end
               commands << [:flow, :call, ident_to_label(name)]
             end
@@ -197,15 +217,15 @@ module Akaza
         end
       end
 
-      private def push_value(ast)
+      private def compile_value(ast)
         commands = []
 
         case ast
         in [:LIT, num]
-          commands << [:stack, :push, num]
+          commands << [:stack, :push, num_with_type(num)]
         in [:STR, str]
           check_char!(str)
-          commands << [:stack, :push, str.ord]
+          commands << [:stack, :push, num_with_type(str.ord)]
         in [:LVAR, name]
           commands << [:stack, :push, ident_to_addr(name)]
           commands << [:heap, :load]
@@ -214,17 +234,22 @@ module Akaza
           commands << [:io, :read_num]
           commands << [:stack, :push, TMP_ADDR]
           commands << [:heap, :load]
+          commands.concat(WRAP_NUMBER_COMMANDS)
         in [:VCALL, :get_as_char]
           commands << [:stack, :push, TMP_ADDR]
           commands << [:io, :read_char]
           commands << [:stack, :push, TMP_ADDR]
           commands << [:heap, :load]
+          commands.concat(WRAP_NUMBER_COMMANDS)
         in [:OPCALL, l, sym, [:ARRAY, r, nil]]
           com = {'+': :add, '-': :sub, '*': :multi, '/': :div, '%': :mod}[sym]
           raise ParserError, "Unknown symbol: #{sym}" unless com
-          commands.concat(push_value(l))
-          commands.concat(push_value(r))
+          commands.concat(compile_value(l))
+          commands.concat(UNWRAP_COMMANDS)
+          commands.concat(compile_value(r))
+          commands.concat(UNWRAP_COMMANDS)
           commands << [:calc, com]
+          commands.concat(WRAP_NUMBER_COMMANDS)
         end
 
         commands
@@ -236,7 +261,8 @@ module Akaza
         end_label = ident_to_label(nil)
 
         body = -> (x, sym) do
-          commands.concat(push_value(x))
+          commands.concat(compile_value(x))
+          commands.concat(UNWRAP_COMMANDS)
           commands << [:flow, sym, else_label]
           commands.concat(ast_to_commands(else_body, main: false)) if else_body
           commands << [:flow, :jump, end_label]
@@ -267,7 +293,8 @@ module Akaza
 
         make_body = -> (x, sym) do
           commands << [:flow, :def, cond_label]
-          commands.concat(push_value(x))
+          commands.concat(compile_value(x))
+          commands.concat(UNWRAP_COMMANDS)
           commands << [:flow, sym, body_label]
           commands << [:flow, :jump, end_label]
           commands << [:flow, :def, body_label]
@@ -322,6 +349,10 @@ module Akaza
 
       private def ident_to_addr(ident)
         @addrs[ident] ||= next_addr_index
+      end
+
+      private def num_with_type(num)
+        (num << TYPE_BITS) + TYPE_INT
       end
     end
   end
