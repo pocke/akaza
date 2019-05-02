@@ -229,18 +229,10 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
-  class AnyClass
-    def initialize(klass)
-      @klass = klass
-    end
-
-    def ==(right)
-      right.is_a? @klass
-    end
-  end
-
-  def any(klass)
-    AnyClass.new(klass)
+  def test_transpile_array
+    assert_eval "", <<~RUBY
+      addr = [1, 2, 3]
+    RUBY
   end
 
   def assert_eval(expected_output, code, input = StringIO.new(''))

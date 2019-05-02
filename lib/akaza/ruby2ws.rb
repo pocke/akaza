@@ -36,10 +36,13 @@ module Akaza
     TAB = "\t"
     NL = "\n"
 
-    TMP_ADDR = 0
+    NONE_ADDR = 0
+    TMP_ADDR = 1
 
     TYPE_BITS = 2
-    TYPE_INT = 1
+
+    TYPE_INT   = 0b01
+    TYPE_ARRAY = 0b10
 
     # Call when stack top is the target number.
     UNWRAP_COMMANDS = [
@@ -64,7 +67,7 @@ module Akaza
       def initialize(ruby_code)
         @ruby_code = ruby_code
 
-        @addr_index = 0
+        @addr_index = 1
         @addrs = {}
 
         @label_index = 0
@@ -250,6 +253,21 @@ module Akaza
           commands.concat(UNWRAP_COMMANDS)
           commands << [:calc, com]
           commands.concat(WRAP_NUMBER_COMMANDS)
+        in [:ARRAY, *items, nil]
+          addrs = ((items.size) * 2).times.map { next_addr_index }
+          items.each.with_index do |item, index|
+            value_addr = addrs[index * 2]
+            commands << [:stack, :push, value_addr]
+            commands.concat(compile_value(item))
+            commands << [:heap, :save]
+
+            next_addr = addrs[index * 2 + 1]
+            val = addrs[(index + 1) * 2 + 1] || NONE_ADDR
+            commands << [:stack, :push, next_addr]
+            commands << [:stack, :push, array_with_type(val)]
+            commands << [:heap, :save]
+          end
+          commands << [:stack, :push, array_with_type(addrs[0])]
         end
 
         commands
@@ -353,6 +371,10 @@ module Akaza
 
       private def num_with_type(num)
         (num << TYPE_BITS) + TYPE_INT
+      end
+
+      private def array_with_type(array_addr)
+        (array_addr << TYPE_BITS) + TYPE_ARRAY
       end
     end
   end
