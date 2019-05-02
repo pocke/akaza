@@ -238,10 +238,6 @@ module Akaza
           commands << [:stack, :push, var_addr]
           commands << [:stack, :push, var_addr]
           commands << [:heap, :load]
-          # Fill zero
-          commands << [:stack, :push, var_addr]
-          commands << [:stack, :push, 0]
-          commands << [:heap, :save]
         end
 
         block.call
