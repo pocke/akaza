@@ -89,230 +89,210 @@ module Akaza
         commands_to_ws(commands)
       end
 
-      private def compile_expr(ast)
+      private def compile_expr(node, lvars: [])
         commands = []
-        lvars = []
 
-        ast.traverse do |node, opt|
-          case node
-          in [:FCALL, :put_as_number, [:ARRAY, arg, nil]]
-            commands.concat(compile_expr(arg))
-            commands.concat(UNWRAP_COMMANDS)
-            commands << [:io, :write_num]
-            opt[:skip_children] = true
-          in [:FCALL, :put_as_char, [:ARRAY, arg, nil]]
-            commands.concat(compile_expr(arg))
-            commands.concat(UNWRAP_COMMANDS)
-            commands << [:io, :write_char]
-            opt[:skip_children] = true
-          in [:VCALL, :get_as_number]
-            commands << [:stack, :push, TMP_ADDR]
-            commands << [:io, :read_num]
-            commands << [:stack, :push, TMP_ADDR]
-            commands << [:heap, :load]
-            commands.concat(WRAP_NUMBER_COMMANDS)
-            opt[:skip_children] = true
-          in [:VCALL, :get_as_char]
-            commands << [:stack, :push, TMP_ADDR]
-            commands << [:io, :read_char]
-            commands << [:stack, :push, TMP_ADDR]
-            commands << [:heap, :load]
-            commands.concat(WRAP_NUMBER_COMMANDS)
-            opt[:skip_children] = true
-          in [:OPCALL, l, sym, [:ARRAY, r, nil]]
-            com = {'+': :add, '-': :sub, '*': :multi, '/': :div, '%': :mod}[sym]
-            raise ParserError, "Unknown symbol: #{sym}" unless com
-            commands.concat(compile_expr(l))
-            commands.concat(UNWRAP_COMMANDS)
-            commands.concat(compile_expr(r))
-            commands.concat(UNWRAP_COMMANDS)
-            commands << [:calc, com]
-            commands.concat(WRAP_NUMBER_COMMANDS)
-            opt[:skip_children] = true
-          in [:CALL, expr, :shift, nil]
-            commands.concat(compile_expr(expr))
-            commands.concat(UNWRAP_COMMANDS)
-            # stack: [unwrapped_addr_of_array]
+        case node
+        in [:FCALL, :put_as_number, [:ARRAY, arg, nil]]
+          commands.concat(compile_expr(arg, lvars: lvars))
+          commands.concat(UNWRAP_COMMANDS)
+          commands << [:io, :write_num]
+        in [:FCALL, :put_as_char, [:ARRAY, arg, nil]]
+          commands.concat(compile_expr(arg, lvars: lvars))
+          commands.concat(UNWRAP_COMMANDS)
+          commands << [:io, :write_char]
+        in [:VCALL, :get_as_number]
+          commands << [:stack, :push, TMP_ADDR]
+          commands << [:io, :read_num]
+          commands << [:stack, :push, TMP_ADDR]
+          commands << [:heap, :load]
+          commands.concat(WRAP_NUMBER_COMMANDS)
+        in [:VCALL, :get_as_char]
+          commands << [:stack, :push, TMP_ADDR]
+          commands << [:io, :read_char]
+          commands << [:stack, :push, TMP_ADDR]
+          commands << [:heap, :load]
+          commands.concat(WRAP_NUMBER_COMMANDS)
+        in [:OPCALL, l, sym, [:ARRAY, r, nil]]
+          com = {'+': :add, '-': :sub, '*': :multi, '/': :div, '%': :mod}[sym]
+          raise ParserError, "Unknown symbol: #{sym}" unless com
+          commands.concat(compile_expr(l, lvars: lvars))
+          commands.concat(UNWRAP_COMMANDS)
+          commands.concat(compile_expr(r, lvars: lvars))
+          commands.concat(UNWRAP_COMMANDS)
+          commands << [:calc, com]
+          commands.concat(WRAP_NUMBER_COMMANDS)
+        in [:CALL, expr, :shift, nil]
+          commands.concat(compile_expr(expr, lvars: lvars))
+          commands.concat(UNWRAP_COMMANDS)
+          # stack: [unwrapped_addr_of_array]
 
-            commands << [:stack, :dup]
-            commands << [:heap, :load]
-            # stack: [unwrapped_addr_of_array, addr_of_first_item]
-            commands << [:stack, :swap]
-            commands << [:stack, :dup]
-            commands << [:heap, :load]
-            # stack: [addr_of_first_item, unwrapped_addr_of_array, addr_of_first_item]
+          commands << [:stack, :dup]
+          commands << [:heap, :load]
+          # stack: [unwrapped_addr_of_array, addr_of_first_item]
+          commands << [:stack, :swap]
+          commands << [:stack, :dup]
+          commands << [:heap, :load]
+          # stack: [addr_of_first_item, unwrapped_addr_of_array, addr_of_first_item]
 
-            commands << [:stack, :push, 1]
-            commands << [:calc, :add]
-            commands << [:heap, :load]
-            # stack: [addr_of_first_item, unwrapped_addr_of_array, addr_of_second_item]
+          commands << [:stack, :push, 1]
+          commands << [:calc, :add]
+          commands << [:heap, :load]
+          # stack: [addr_of_first_item, unwrapped_addr_of_array, addr_of_second_item]
 
-            commands << [:heap, :save]
-            # stack: [addr_of_first_item]
+          commands << [:heap, :save]
+          # stack: [addr_of_first_item]
 
-            commands << [:heap, :load]
-            # stack: [first_item]
-            opt[:skip_children] = true
-          in [:CALL, recv, :[], [:ARRAY, index, nil]]
-            commands.concat(compile_expr(recv))
-            commands.concat(UNWRAP_COMMANDS)
-            commands << [:heap, :load]
-            commands.concat(compile_expr(index))
-            # stack: [addr_of_first_item, index]
+          commands << [:heap, :load]
+          # stack: [first_item]
+        in [:CALL, recv, :[], [:ARRAY, index, nil]]
+          commands.concat(compile_expr(recv, lvars: lvars))
+          commands.concat(UNWRAP_COMMANDS)
+          commands << [:heap, :load]
+          commands.concat(compile_expr(index, lvars: lvars))
+          # stack: [addr_of_first_item, index]
 
-            commands.concat(UNWRAP_COMMANDS)
-            commands.concat(times do
-              c = []
-              c << [:stack, :swap]
-              # stack: [index, addr_of_first_item]
-              c << [:stack, :push, 1]
-              c << [:calc, :add]
-              c << [:heap, :load]
-              # stack: [index, addr_of_next_item]
-              c << [:stack, :swap]
-              c
-            end)
-            commands << [:stack, :pop]
-            # stack: [addr_of_the_target_item]
-            commands << [:heap, :load]
-            opt[:skip_children] = true
-          in [:VCALL, :exit]
-            commands << [:flow, :exit]
-          in [:LASGN, var, arg]
-            var_addr = ident_to_addr(var)
-            commands << [:stack, :push, var_addr]
-            commands.concat(compile_expr(arg))
-            commands << [:heap, :save]
-            opt[:skip_children] = true
-            lvars << var_addr
-          in [:ATTRASGN, recv, :[]=, [:ARRAY, index, value, nil]]
-            commands.concat(compile_expr(recv))
-            commands.concat(UNWRAP_COMMANDS)
-            commands << [:heap, :load]
-            commands.concat(compile_expr(index))
-            # stack: [addr_of_first_item, index]
+          commands.concat(UNWRAP_COMMANDS)
+          commands.concat(times do
+            c = []
+            c << [:stack, :swap]
+            # stack: [index, addr_of_first_item]
+            c << [:stack, :push, 1]
+            c << [:calc, :add]
+            c << [:heap, :load]
+            # stack: [index, addr_of_next_item]
+            c << [:stack, :swap]
+            c
+          end)
+          commands << [:stack, :pop]
+          # stack: [addr_of_the_target_item]
+          commands << [:heap, :load]
+        in [:VCALL, :exit]
+          commands << [:flow, :exit]
+        in [:LASGN, var, arg]
+          var_addr = ident_to_addr(var)
+          commands << [:stack, :push, var_addr]
+          commands.concat(compile_expr(arg, lvars: lvars))
+          commands << [:heap, :save]
+          lvars << var_addr
+        in [:ATTRASGN, recv, :[]=, [:ARRAY, index, value, nil]]
+          commands.concat(compile_expr(recv, lvars: lvars))
+          commands.concat(UNWRAP_COMMANDS)
+          commands << [:heap, :load]
+          commands.concat(compile_expr(index, lvars: lvars))
+          # stack: [addr_of_first_item, index]
 
-            commands.concat(UNWRAP_COMMANDS)
-            commands.concat(times do
-              c = []
-              c << [:stack, :swap]
-              # stack: [index, addr_of_first_item]
-              c << [:stack, :push, 1]
-              c << [:calc, :add]
-              c << [:heap, :load]
-              # stack: [index, addr_of_next_item]
-              c << [:stack, :swap]
-              c
-            end)
-            commands << [:stack, :pop]
-            # stack: [addr_of_the_target_item]
+          commands.concat(UNWRAP_COMMANDS)
+          commands.concat(times do
+            c = []
+            c << [:stack, :swap]
+            # stack: [index, addr_of_first_item]
+            c << [:stack, :push, 1]
+            c << [:calc, :add]
+            c << [:heap, :load]
+            # stack: [index, addr_of_next_item]
+            c << [:stack, :swap]
+            c
+          end)
+          commands << [:stack, :pop]
+          # stack: [addr_of_the_target_item]
 
-            commands.concat(compile_expr(value))
-            commands << [:heap, :save]
-            opt[:skip_children] = true
-          in [:DEFN, name, [:SCOPE, lvar_table, [:ARGS, args_count ,*_], body]]
-            m = [
-              [:flow, :def, ident_to_label(name)],
-            ]
-            lvar_table[0...args_count].reverse.each do |args_name|
-              m << [:stack, :push, ident_to_addr(args_name)]
-              m << [:stack, :swap]
-              m << [:heap, :save]
-            end
-            m.concat(compile_expr(body))
-            m << [:flow, :end]
-
-            @methods << m
-            opt[:skip_children] = true
-          in [:SCOPE, *_] | [:BLOCK, *_]
-            # skip
-          in [:VCALL, name]
-            with_storing_lvars(lvars, commands) do
-              commands << [:flow, :call, ident_to_label(name)]
-            end
-            opt[:skip_children] = true
-          in [:FCALL, name, [:ARRAY, *args, nil]]
-            with_storing_lvars(lvars, commands) do
-              args.each do |arg|
-                commands.concat(compile_expr(arg))
-              end
-              commands << [:flow, :call, ident_to_label(name)]
-            end
-            opt[:skip_children] = true
-          in [:CALL, recv, :unshift, [:ARRAY, expr, nil]]
-            commands.concat(compile_expr(recv))
-            commands.concat(UNWRAP_COMMANDS)
-            # stack: [unwrapped_addr_of_array]
-
-            commands << [:stack, :dup]
-            commands << [:heap, :load]
-            # stack: [unwrapped_addr_of_array, addr_of_first_item]
-
-            # Allocate a new item
-            new_item_value_addr = next_addr_index
-            new_item_addr_addr = next_addr_index
-            commands << [:stack, :push, new_item_value_addr]
-            commands.concat(compile_expr(expr))
-            commands << [:heap, :save]
-            commands << [:stack, :push, new_item_addr_addr]
-            commands << [:stack, :swap]
-            commands << [:heap, :save]
-            # stack: [unwrapped_addr_of_array]
-
-            commands << [:stack, :push, new_item_value_addr]
-            commands << [:heap, :save]
-
-            opt[:skip_children] = true
-          in [:IF, cond, if_body, else_body]
-            commands.concat(compile_if(cond, if_body, else_body))
-            opt[:skip_children] = true
-          in [:UNLESS, cond, else_body, if_body]
-            commands.concat(compile_if(cond, if_body, else_body))
-            opt[:skip_children] = true
-          in [:WHILE, cond, body]
-            commands.concat(compile_while(cond, body))
-            opt[:skip_children] = true
-          in [:LIT, num]
-            commands << [:stack, :push, num_with_type(num)]
-            opt[:skip_children] = true
-          in [:STR, str]
-            check_char!(str)
-            commands << [:stack, :push, num_with_type(str.ord)]
-            opt[:skip_children] = true
-          in [:LVAR, name]
-            commands << [:stack, :push, ident_to_addr(name)]
-            commands << [:heap, :load]
-            opt[:skip_children] = true
-          in [:ARRAY, *items, nil]
-            array_addr = next_addr_index
-            addrs = ((items.size) * 2).times.map { next_addr_index }
-            commands << [:stack, :push, array_addr]
-            commands << [:stack, :push, addrs[0] || NONE_ADDR]
-            commands << [:heap, :save]
-
-            items.each.with_index do |item, index|
-              value_addr = addrs[index * 2]
-              commands << [:stack, :push, value_addr]
-              commands.concat(compile_expr(item))
-              commands << [:heap, :save]
-
-              next_addr = addrs[index * 2 + 1]
-              val = addrs[(index + 1) * 2] || NONE_ADDR
-              commands << [:stack, :push, next_addr]
-              commands << [:stack, :push, val]
-              commands << [:heap, :save]
-            end
-
-            commands << [:stack, :push, array_with_type(array_addr)]
-            opt[:skip_children] = true
-          in [:ZARRAY]
-            addr = next_addr_index
-            commands << [:stack, :push, addr]
-            commands << [:stack, :push, NONE_ADDR]
-            commands << [:heap, :save]
-            commands << [:stack, :push, array_with_type(addr)]
-            opt[:skip_children] = true
+          commands.concat(compile_expr(value, lvars: lvars))
+          commands << [:heap, :save]
+        in [:DEFN, name, [:SCOPE, lvar_table, [:ARGS, args_count ,*_], body]]
+          m = [
+            [:flow, :def, ident_to_label(name)],
+          ]
+          lvar_table[0...args_count].reverse.each do |args_name|
+            m << [:stack, :push, ident_to_addr(args_name)]
+            m << [:stack, :swap]
+            m << [:heap, :save]
           end
+          m.concat(compile_expr(body))
+          m << [:flow, :end]
+
+          @methods << m
+        in [:SCOPE, _, _, body]
+          commands.concat(compile_expr(body, lvars: lvars))
+        in [:BLOCK, *children]
+          children.each do |child|
+            commands.concat(compile_expr(child, lvars: lvars))
+          end
+        in [:VCALL, name]
+          with_storing_lvars(lvars, commands) do
+            commands << [:flow, :call, ident_to_label(name)]
+          end
+        in [:FCALL, name, [:ARRAY, *args, nil]]
+          with_storing_lvars(lvars, commands) do
+            args.each do |arg|
+              commands.concat(compile_expr(arg, lvars: lvars))
+            end
+            commands << [:flow, :call, ident_to_label(name)]
+          end
+        in [:CALL, recv, :unshift, [:ARRAY, expr, nil]]
+          commands.concat(compile_expr(recv, lvars: lvars))
+          commands.concat(UNWRAP_COMMANDS)
+          # stack: [unwrapped_addr_of_array]
+
+          commands << [:stack, :dup]
+          commands << [:heap, :load]
+          # stack: [unwrapped_addr_of_array, addr_of_first_item]
+
+          # Allocate a new item
+          new_item_value_addr = next_addr_index
+          new_item_addr_addr = next_addr_index
+          commands << [:stack, :push, new_item_value_addr]
+          commands.concat(compile_expr(expr, lvars: lvars))
+          commands << [:heap, :save]
+          commands << [:stack, :push, new_item_addr_addr]
+          commands << [:stack, :swap]
+          commands << [:heap, :save]
+          # stack: [unwrapped_addr_of_array]
+
+          commands << [:stack, :push, new_item_value_addr]
+          commands << [:heap, :save]
+
+        in [:IF, cond, if_body, else_body]
+          commands.concat(compile_if(cond, if_body, else_body, lvars: lvars))
+        in [:UNLESS, cond, else_body, if_body]
+          commands.concat(compile_if(cond, if_body, else_body, lvars: lvars))
+        in [:WHILE, cond, body]
+          commands.concat(compile_while(cond, body, lvars: lvars))
+        in [:LIT, num]
+          commands << [:stack, :push, num_with_type(num)]
+        in [:STR, str]
+          check_char!(str)
+          commands << [:stack, :push, num_with_type(str.ord)]
+        in [:LVAR, name]
+          commands << [:stack, :push, ident_to_addr(name)]
+          commands << [:heap, :load]
+        in [:ARRAY, *items, nil]
+          array_addr = next_addr_index
+          addrs = ((items.size) * 2).times.map { next_addr_index }
+          commands << [:stack, :push, array_addr]
+          commands << [:stack, :push, addrs[0] || NONE_ADDR]
+          commands << [:heap, :save]
+
+          items.each.with_index do |item, index|
+            value_addr = addrs[index * 2]
+            commands << [:stack, :push, value_addr]
+            commands.concat(compile_expr(item, lvars: lvars))
+            commands << [:heap, :save]
+
+            next_addr = addrs[index * 2 + 1]
+            val = addrs[(index + 1) * 2] || NONE_ADDR
+            commands << [:stack, :push, next_addr]
+            commands << [:stack, :push, val]
+            commands << [:heap, :save]
+          end
+
+          commands << [:stack, :push, array_with_type(array_addr)]
+        in [:ZARRAY]
+          addr = next_addr_index
+          commands << [:stack, :push, addr]
+          commands << [:stack, :push, NONE_ADDR]
+          commands << [:heap, :save]
+          commands << [:stack, :push, array_with_type(addr)]
         end
 
         commands
@@ -407,19 +387,19 @@ module Akaza
         commands
       end
 
-      private def compile_if(cond, if_body, else_body)
+      private def compile_if(cond, if_body, else_body, lvars:)
         commands = []
         else_label = ident_to_label(nil)
         end_label = ident_to_label(nil)
 
         body = -> (x, sym) do
-          commands.concat(compile_expr(x))
+          commands.concat(compile_expr(x, lvars: lvars))
           commands.concat(UNWRAP_COMMANDS)
           commands << [:flow, sym, else_label]
-          commands.concat(compile_expr(else_body)) if else_body
+          commands.concat(compile_expr(else_body, lvars: lvars)) if else_body
           commands << [:flow, :jump, end_label]
           commands << [:flow, :def, else_label]
-          commands.concat(compile_expr(if_body)) if if_body
+          commands.concat(compile_expr(if_body, lvars: lvars)) if if_body
           commands << [:flow, :def, end_label]
         end
 
@@ -437,7 +417,7 @@ module Akaza
         commands
       end
 
-      private def compile_while(cond, body)
+      private def compile_while(cond, body, lvars:)
         commands = []
         cond_label = ident_to_label(nil)
         body_label = ident_to_label(nil)
@@ -445,12 +425,12 @@ module Akaza
 
         make_body = -> (x, sym) do
           commands << [:flow, :def, cond_label]
-          commands.concat(compile_expr(x))
+          commands.concat(compile_expr(x, lvars: lvars))
           commands.concat(UNWRAP_COMMANDS)
           commands << [:flow, sym, body_label]
           commands << [:flow, :jump, end_label]
           commands << [:flow, :def, body_label]
-          commands.concat(compile_expr(body))
+          commands.concat(compile_expr(body, lvars: lvars))
           commands << [:flow, :jump, cond_label]
           commands << [:flow, :def, end_label]
         end
