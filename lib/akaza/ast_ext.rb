@@ -6,12 +6,9 @@ module Akaza
       end
 
       def traverse(&on_enter)
-        opt = {}
-        on_enter.call self, opt
-        unless opt[:skip_children]
-          children.each do |child|
-            child.traverse(&on_enter) if child.is_a?(RubyVM::AbstractSyntaxTree::Node)
-          end
+        on_enter.call self
+        children.each do |child|
+          child.traverse(&on_enter) if child.is_a?(RubyVM::AbstractSyntaxTree::Node)
         end
       end
 

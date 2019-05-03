@@ -65,6 +65,16 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_def_return_value
+    assert_eval "42", <<~RUBY
+      def foo(x, y)
+        x * y
+      end
+
+      put_as_number(foo(21, 2))
+    RUBY
+  end
+
   def test_transpile_lvar_to_lvar
     assert_eval "42", <<~RUBY
       x = 42
@@ -90,6 +100,12 @@ class Ruby2wsTest < Minitest::Test
       if x == 0
         put_as_number 42
       end
+    RUBY
+  end
+
+  def test_transpile_if3
+    assert_eval "0", <<~RUBY
+      put_as_number((42 if 1 == 0)) # It returns nil, and nil is evaluated as 0.
     RUBY
   end
 
@@ -249,6 +265,18 @@ class Ruby2wsTest < Minitest::Test
       put_as_number addr.shift
       put_as_number addr.shift
       put_as_number addr.shift
+    RUBY
+  end
+
+  def test_transpile_unshift_return_value
+    assert_eval "123", <<~RUBY
+      addr = [3]
+      addr2 = addr.unshift 2
+      addr.unshift 1
+
+      put_as_number addr.shift
+      put_as_number addr.shift
+      put_as_number addr2.shift
     RUBY
   end
 
