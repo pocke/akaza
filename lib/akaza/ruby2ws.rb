@@ -158,27 +158,7 @@ module Akaza
           commands << [:heap, :load]
           # stack: [first_item]
         in [:CALL, recv, :[], [:ARRAY, index, nil]]
-          commands.concat(compile_expr(recv))
-          commands.concat(UNWRAP_COMMANDS)
-          commands << [:heap, :load]
-          commands.concat(compile_expr(index))
-          # stack: [addr_of_first_item, index]
-
-          commands.concat(UNWRAP_COMMANDS)
-          commands.concat(times do
-            c = []
-            c << [:stack, :swap]
-            # stack: [index, addr_of_first_item]
-            c << [:stack, :push, 1]
-            c << [:calc, :add]
-            c << [:heap, :load]
-            # stack: [index, addr_of_next_item]
-            c << [:stack, :swap]
-            c
-          end)
-          commands << [:stack, :pop]
-          # stack: [addr_of_the_target_item]
-          commands << [:heap, :load]
+          commands.concat(compile_array_index_access(recv, index))
         in [:VCALL, :exit]
           commands << [:flow, :exit]
         in [:LASGN, var, arg]
@@ -555,6 +535,35 @@ module Akaza
         in [:OPCALL, [:LIT, 0], :<, [:ARRAY, x, nil]]
           make_body.(x, :jump_if_neg)
         end
+
+        commands
+      end
+
+      # Array#[]
+      private def compile_array_index_access(recv, index)
+        commands = []
+
+        commands.concat(compile_expr(recv))
+        commands.concat(UNWRAP_COMMANDS)
+        commands << [:heap, :load]
+        commands.concat(compile_expr(index))
+        # stack: [addr_of_first_item, index]
+
+        commands.concat(UNWRAP_COMMANDS)
+        commands.concat(times do
+          c = []
+          c << [:stack, :swap]
+          # stack: [index, addr_of_first_item]
+          c << [:stack, :push, 1]
+          c << [:calc, :add]
+          c << [:heap, :load]
+          # stack: [index, addr_of_next_item]
+          c << [:stack, :swap]
+          c
+        end)
+        commands << [:stack, :pop]
+        # stack: [addr_of_the_target_item]
+        commands << [:heap, :load]
 
         commands
       end
