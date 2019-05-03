@@ -305,20 +305,50 @@ module Akaza
           commands << [:stack, :push, with_type(addr, TYPE_ARRAY)]
         in [:HASH, nil]
           hash_addr = next_addr_index
-          addrs = (HASH_SIZE * 3).times.map { next_addr_index }
+          commands.concat(initialize_hash(hash_addr))
+        in [:HASH, [:ARRAY, *pairs, nil]]
+          hash_addr = next_addr_index
+          # initialize_hash sets the return value to bottom of the stack.
+          commands.concat(initialize_hash(hash_addr))
 
-          addrs.each_slice(3) do |key_addr, value_addr, next_addr|
-            commands << [:stack, :push, key_addr]
-            commands << [:stack, :push, NONE]
+          pairs.each_slice(2) do |key, value|
+            commands.concat(compile_expr(key, lvars: lvars))
+            # calc hash
+            commands << [:stack, :dup]
+            commands.concat(UNWRAP_COMMANDS)
+            commands << [:stack, :push, HASH_SIZE]
+            commands << [:calc, :mod]
+            # stack: [key, hash]
+
+            commands << [:stack, :push, hash_addr + 1] # hash_addr + 1 is the first item's address.
+            commands << [:calc, :add]
+            # stack: [key, key_addr]
+
+            # Save key
+            commands << [:stack, :dup]
+            commands << [:stack, :push, TMP_ADDR]
+            commands << [:stack, :swap]
+            commands << [:heap, :save]
+            # stack: [key, key_addr]
+            commands << [:stack, :swap]
+            commands << [:heap, :save]
+            # stack: []
+
+            # Save value
+            commands << [:stack, :push, TMP_ADDR]
+            commands << [:heap, :load]
+            commands << [:stack, :dup]
+            # stack: [key_addr, key_addr]
+            commands << [:stack, :push, 1]
+            commands << [:calc, :add]
+            commands.concat(compile_expr(value, lvars: lvars))
+            # stack: [key_addr, value_addr, value]
+            commands << [:heap, :save]
+
+            # Save addr
+            commands << [:stack, :push, NONE_ADDR]
             commands << [:heap, :save]
           end
-
-          commands << [:stack, :push, hash_addr]
-          commands << [:stack, :push, addrs[0]]
-          commands << [:heap, :save]
-
-          commands << [:stack, :push, with_type(hash_addr, TYPE_HASH)]
-        in [:HASH, [:ARRAY, *pairs, nil]]
         end
 
         commands
@@ -496,6 +526,26 @@ module Akaza
         in [:OPCALL, [:LIT, 0], :<, [:ARRAY, x, nil]]
           make_body.(x, :jump_if_neg)
         end
+
+        commands
+      end
+
+      private def initialize_hash(hash_addr)
+        commands = []
+
+        addrs = (HASH_SIZE * 3).times.map { next_addr_index }
+
+        addrs.each_slice(3) do |key_addr, value_addr, next_addr|
+          commands << [:stack, :push, key_addr]
+          commands << [:stack, :push, NONE]
+          commands << [:heap, :save]
+        end
+
+        commands << [:stack, :push, hash_addr]
+        commands << [:stack, :push, addrs[0]]
+        commands << [:heap, :save]
+
+        commands << [:stack, :push, with_type(hash_addr, TYPE_HASH)]
 
         commands
       end
