@@ -93,6 +93,12 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_if3
+    assert_eval "0", <<~RUBY
+      put_as_number((42 if 1 == 0)) # It returns nil, and nil is evaluated as 0.
+    RUBY
+  end
+
   def test_transpile_unless
     assert_eval "42", <<~RUBY
       x = 1
