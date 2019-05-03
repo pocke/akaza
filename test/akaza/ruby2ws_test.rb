@@ -322,6 +322,68 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_hash_empty
+    assert_eval '', <<~RUBY
+      x = {}
+    RUBY
+  end
+
+  def test_transpile_hash_with_one_value
+    assert_eval '', <<~RUBY
+      x = {
+        1 => 100,
+      }
+    RUBY
+  end
+
+  def test_transpile_hash_with_value
+    assert_eval '', <<~RUBY
+      x = {
+        1 => 2,   # 1 mod 11 = 1
+        2 => 3,   # 2 mod 11 = 2
+        12 => 4,  # 12 mod 11 = 1
+        23 => 10, # 23 mod 11 = 1
+      }
+    RUBY
+  end
+
+  def test_transpile_hash_ref
+    assert_eval '42', <<~RUBY
+      x = { 1 => 42 }
+      put_as_number x[1]
+    RUBY
+  end
+
+  def test_transpile_hash_ref_with_collision
+    assert_eval '42,4,10', <<~RUBY
+      x = {
+        1 => 42,   # 1 mod 11 = 1
+        2 => 3,   # 2 mod 11 = 2
+        12 => 4,  # 12 mod 11 = 1
+        23 => 10, # 23 mod 11 = 1
+      }
+      put_as_number x[1]
+      put_as_char ','
+      put_as_number x[12]
+      put_as_char ','
+      put_as_number x[23]
+    RUBY
+  end
+
+  def test_transpile_hash_nested
+    assert_eval '2,5', <<~RUBY
+      x = {
+        1 => 2,
+        3 => {
+          4 => 5,
+        },
+      }
+      put_as_number x[1]
+      put_as_char ','
+      put_as_number x[3][4]
+    RUBY
+  end
+
   def assert_eval(expected_output, code, input = StringIO.new(''))
     ws = Akaza::Ruby2ws::Transpiler.new(code).transpile
     out = StringIO.new
