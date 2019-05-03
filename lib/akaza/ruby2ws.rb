@@ -158,7 +158,26 @@ module Akaza
           commands << [:heap, :load]
           # stack: [first_item]
         in [:CALL, recv, :[], [:ARRAY, index, nil]]
-          commands.concat(compile_array_index_access(recv, index))
+          label_array = ident_to_label(nil)
+          label_end = ident_to_label(nil)
+
+          commands.concat(compile_expr(recv))
+          commands << [:stack, :dup]
+          commands << [:stack, :push, 2 ** TYPE_BITS]
+          commands << [:calc, :mod]
+          commands << [:stack, :push, TYPE_ARRAY]
+          commands << [:calc, :sub]
+          commands << [:flow, :jump_if_zero, label_array] # when array
+          # when hash
+          # TODO: implement
+          commands << [:stack, :push, NONE] # remove me
+          commands << [:flow, :jump, label_end]
+
+          commands << [:flow, :def, label_array]
+          commands.concat(compile_expr(index))
+          commands << [:flow, :call, array_index_access_label]
+
+          commands << [:flow, :def, label_end]
         in [:VCALL, :exit]
           commands << [:flow, :exit]
         in [:LASGN, var, arg]
@@ -540,32 +559,41 @@ module Akaza
       end
 
       # Array#[]
-      private def compile_array_index_access(recv, index)
-        commands = []
+      # stack: [recv, index], they're wrapped.
+      private def array_index_access_label
+        @array_index_access_label ||= (
+          label = ident_to_label(nil)
 
-        commands.concat(compile_expr(recv))
-        commands.concat(UNWRAP_COMMANDS)
-        commands << [:heap, :load]
-        commands.concat(compile_expr(index))
-        # stack: [addr_of_first_item, index]
+          commands = []
+          commands << [:flow, :def, label]
 
-        commands.concat(UNWRAP_COMMANDS)
-        commands.concat(times do
-          c = []
-          c << [:stack, :swap]
-          # stack: [index, addr_of_first_item]
-          c << [:stack, :push, 1]
-          c << [:calc, :add]
-          c << [:heap, :load]
-          # stack: [index, addr_of_next_item]
-          c << [:stack, :swap]
-          c
-        end)
-        commands << [:stack, :pop]
-        # stack: [addr_of_the_target_item]
-        commands << [:heap, :load]
+          commands << [:stack, :swap]
+          commands.concat(UNWRAP_COMMANDS)
+          commands << [:heap, :load]
+          commands << [:stack, :swap]
+          commands.concat(UNWRAP_COMMANDS)
+          # stack: [addr_of_first_item, index]
 
-        commands
+          commands.concat(times do
+            c = []
+            c << [:stack, :swap]
+            # stack: [index, addr_of_first_item]
+            c << [:stack, :push, 1]
+            c << [:calc, :add]
+            c << [:heap, :load]
+            # stack: [index, addr_of_next_item]
+            c << [:stack, :swap]
+            c
+          end)
+          commands << [:stack, :pop]
+          # stack: [addr_of_the_target_item]
+          commands << [:heap, :load]
+
+          commands << [:flow, :end]
+          @methods << commands
+
+          label
+        )
       end
 
       private def initialize_hash(hash_addr)
