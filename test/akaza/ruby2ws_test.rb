@@ -322,10 +322,19 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
-  def test_transpile_hash
+  def test_transpile_hash_empty
     assert_eval '', <<~RUBY
       x = {}
-      y = { 1 => 2 }
+    RUBY
+  end
+
+  def test_transpile_hash_with_value
+    assert_eval '', <<~RUBY
+      x = {
+        1 => 2,  # 1 mod 11 = 1
+        2 => 3,  # 2 mod 11 = 2
+        12 => 4, # 12 mod 11 = 1
+      }
     RUBY
   end
 

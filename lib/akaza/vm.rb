@@ -15,7 +15,9 @@ module Akaza
 
     def eval
       while true
-        case @commands[@index]
+        p @stack
+        p @heap
+        case p @commands[@index]
         in [:stack, :push, number]
           @stack.push number
         in [:stack, :dup]

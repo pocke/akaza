@@ -311,6 +311,9 @@ module Akaza
           # initialize_hash sets the return value to bottom of the stack.
           commands.concat(initialize_hash(hash_addr))
 
+          no_collision_label = ident_to_label(nil)
+          when_collision_label = ident_to_label(nil)
+
           pairs.each_slice(2) do |key, value|
             commands.concat(compile_expr(key, lvars: lvars))
             # calc hash
@@ -318,11 +321,34 @@ module Akaza
             commands.concat(UNWRAP_COMMANDS)
             commands << [:stack, :push, HASH_SIZE]
             commands << [:calc, :mod]
+            commands << [:stack, :push, 3]
+            commands << [:calc, :multi]
             # stack: [key, hash]
 
             commands << [:stack, :push, hash_addr + 1] # hash_addr + 1 is the first item's address.
             commands << [:calc, :add]
             # stack: [key, key_addr]
+
+            # Check collision
+            commands << [:flow, :def, when_collision_label]
+            commands << [:stack, :dup]
+            commands << [:heap, :load]
+            commands << [:stack, :push, NONE]
+            commands << [:calc, :sub]
+            # stack: [key, key_addr, is_none]
+
+            commands << [:flow, :jump_if_zero, no_collision_label]
+
+            # when collision
+            commands << [:stack, :push, 2]
+            commands << [:calc, :add]
+            # stack: [key, next_addr]
+            commands << [:heap, :load]
+            # stack: [key, next_key_addr]
+            commands << [:flow, :jump, when_collision_label]
+
+            commands << [:flow, :def, no_collision_label]
+            # End check collision
 
             # Save key
             commands << [:stack, :dup]
@@ -535,7 +561,7 @@ module Akaza
 
         addrs = (HASH_SIZE * 3).times.map { next_addr_index }
 
-        addrs.each_slice(3) do |key_addr, value_addr, next_addr|
+        addrs.each_slice(3) do |key_addr, _value_addr, _next_addr|
           commands << [:stack, :push, key_addr]
           commands << [:stack, :push, NONE]
           commands << [:heap, :save]
