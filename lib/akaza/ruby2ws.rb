@@ -47,7 +47,7 @@ module Akaza
     TYPE_ARRAY   = 0b10
     TYPE_HASH    = 0b11
 
-    HASH_SIZE = 11
+    HASH_SIZE = 3
 
     # NIL is nil
     NIL = 0 << TYPE_BITS + TYPE_SPECIAL
@@ -366,7 +366,10 @@ module Akaza
           commands.concat initialize_hash
         in [:HASH, [:ARRAY, *pairs, nil]]
           commands.concat initialize_hash
+          commands << [:stack, :dup]
+          commands.concat UNWRAP_COMMANDS
           commands.concat SAVE_TMP_COMMANDS
+          commands << [:stack, :pop]
           # stack: [hash_object (unwrapped)]
           # tmp: hash_object (unwrapped)
 

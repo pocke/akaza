@@ -331,7 +331,7 @@ class Ruby2wsTest < Minitest::Test
   def test_transpile_hash_with_one_value
     assert_eval '', <<~RUBY
       x = {
-        1 => 2,
+        1 => 100,
       }
     RUBY
   end
@@ -339,15 +339,15 @@ class Ruby2wsTest < Minitest::Test
   def test_transpile_hash_with_value
     assert_eval '', <<~RUBY
       x = {
-        1 => 2,  # 1 mod 11 = 1
-        2 => 3,  # 2 mod 11 = 2
-        12 => 4, # 12 mod 11 = 1
+        1 => 2,   # 1 mod 11 = 1
+        2 => 3,   # 2 mod 11 = 2
+        12 => 4,  # 12 mod 11 = 1
+        23 => 10, # 23 mod 11 = 1
       }
     RUBY
   end
 
   def test_transpile_hash_ref
-    skip
     assert_eval '42', <<~RUBY
       x = { 1 => 42 }
       put_as_number x[1]
@@ -355,13 +355,18 @@ class Ruby2wsTest < Minitest::Test
   end
 
   def test_transpile_hash_ref_with_collision
-    skip
-    assert_eval '42', <<~RUBY
+    assert_eval '42,4,10', <<~RUBY
       x = {
         1 => 42,   # 1 mod 11 = 1
-        12 => 100, # 12 mod 11 = 1
+        2 => 3,   # 2 mod 11 = 2
+        12 => 4,  # 12 mod 11 = 1
+        23 => 10, # 23 mod 11 = 1
       }
       put_as_number x[1]
+      put_as_char ','
+      put_as_number x[12]
+      put_as_char ','
+      put_as_number x[23]
     RUBY
   end
 
