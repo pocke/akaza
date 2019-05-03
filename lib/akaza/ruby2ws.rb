@@ -41,8 +41,11 @@ module Akaza
 
     TYPE_BITS = 2
 
+    TYPE_NIL   = 0b00
     TYPE_INT   = 0b01
     TYPE_ARRAY = 0b10
+
+    NIL = 0
 
     # Call when stack top is the target number.
     UNWRAP_COMMANDS = [
@@ -83,13 +86,13 @@ module Akaza
 
       def transpile
         ast = RubyVM::AbstractSyntaxTree.parse(@ruby_code)
-        commands = compile_expr(ast)
+        commands = compile_expr(ast, lvars: [])
         commands << [:flow, :exit]
         commands.concat(*@methods)
         commands_to_ws(commands)
       end
 
-      private def compile_expr(node, lvars: [])
+      private def compile_expr(node, lvars:)
         commands = []
 
         case node
@@ -97,10 +100,12 @@ module Akaza
           commands.concat(compile_expr(arg, lvars: lvars))
           commands.concat(UNWRAP_COMMANDS)
           commands << [:io, :write_num]
+          commands << [:stack, :push, NIL]
         in [:FCALL, :put_as_char, [:ARRAY, arg, nil]]
           commands.concat(compile_expr(arg, lvars: lvars))
           commands.concat(UNWRAP_COMMANDS)
           commands << [:io, :write_char]
+          commands << [:stack, :push, NIL]
         in [:VCALL, :get_as_number]
           commands << [:stack, :push, TMP_ADDR]
           commands << [:io, :read_num]
@@ -170,9 +175,11 @@ module Akaza
         in [:VCALL, :exit]
           commands << [:flow, :exit]
         in [:LASGN, var, arg]
+          commands.concat(compile_expr(arg, lvars: lvars))
+          commands << [:stack, :dup]
           var_addr = ident_to_addr(var)
           commands << [:stack, :push, var_addr]
-          commands.concat(compile_expr(arg, lvars: lvars))
+          commands << [:stack, :swap]
           commands << [:heap, :save]
           lvars << var_addr
         in [:ATTRASGN, recv, :[]=, [:ARRAY, index, value, nil]]
@@ -194,11 +201,14 @@ module Akaza
             c << [:stack, :swap]
             c
           end)
-          commands << [:stack, :pop]
-          # stack: [addr_of_the_target_item]
+          commands << [:stack, :pop] # pop index
+          commands << [:stack, :dup]
+          # stack: [addr_of_the_target_item, addr_of_the_target_item]
 
           commands.concat(compile_expr(value, lvars: lvars))
           commands << [:heap, :save]
+          # stack: [addr_of_the_target_item]
+          commands << [:heap, :load]
         in [:DEFN, name, [:SCOPE, lvar_table, [:ARGS, args_count ,*_], body]]
           m = [
             [:flow, :def, ident_to_label(name)],
@@ -208,35 +218,30 @@ module Akaza
             m << [:stack, :swap]
             m << [:heap, :save]
           end
-          m.concat(compile_expr(body))
+          m.concat(compile_expr(body, lvars: []))
           m << [:flow, :end]
 
           @methods << m
         in [:SCOPE, _, _, body]
           commands.concat(compile_expr(body, lvars: lvars))
         in [:BLOCK, *children]
-          children.each do |child|
+          children.each.with_index do |child, index|
             commands.concat(compile_expr(child, lvars: lvars))
+            commands << [:stack, :pop] unless index == children.size - 1
           end
         in [:VCALL, name]
-          with_storing_lvars(lvars, commands) do
-            commands << [:flow, :call, ident_to_label(name)]
-          end
+          commands.concat(compile_call(name, [], lvars: lvars))
         in [:FCALL, name, [:ARRAY, *args, nil]]
-          with_storing_lvars(lvars, commands) do
-            args.each do |arg|
-              commands.concat(compile_expr(arg, lvars: lvars))
-            end
-            commands << [:flow, :call, ident_to_label(name)]
-          end
+          commands.concat(compile_call(name, args, lvars: lvars))
         in [:CALL, recv, :unshift, [:ARRAY, expr, nil]]
           commands.concat(compile_expr(recv, lvars: lvars))
+          commands << [:stack, :dup]
           commands.concat(UNWRAP_COMMANDS)
-          # stack: [unwrapped_addr_of_array]
+          # stack: [array, unwrapped_addr_of_array]
 
           commands << [:stack, :dup]
           commands << [:heap, :load]
-          # stack: [unwrapped_addr_of_array, addr_of_first_item]
+          # stack: [array, unwrapped_addr_of_array, addr_of_first_item]
 
           # Allocate a new item
           new_item_value_addr = next_addr_index
@@ -247,11 +252,10 @@ module Akaza
           commands << [:stack, :push, new_item_addr_addr]
           commands << [:stack, :swap]
           commands << [:heap, :save]
-          # stack: [unwrapped_addr_of_array]
+          # stack: [array, unwrapped_addr_of_array]
 
           commands << [:stack, :push, new_item_value_addr]
           commands << [:heap, :save]
-
         in [:IF, cond, if_body, else_body]
           commands.concat(compile_if(cond, if_body, else_body, lvars: lvars))
         in [:UNLESS, cond, else_body, if_body]
@@ -366,6 +370,23 @@ module Akaza
         end
       end
 
+      # Compile fcall and vcall
+      private def compile_call(name, args, lvars: lvars)
+        commands = []
+        with_storing_lvars(lvars, commands) do
+          args.each do |arg|
+            commands.concat(compile_expr(arg, lvars: lvars))
+          end
+          commands << [:flow, :call, ident_to_label(name)]
+          commands << [:stack, :push, TMP_ADDR]
+          commands << [:stack, :swap]
+          commands << [:heap, :save]
+        end
+        commands << [:stack, :push, TMP_ADDR]
+        commands << [:heap, :load]
+        commands
+      end
+
       # required stack: [count]
       # the count in the stack will be modified by this method.
       private def times(&block)
@@ -396,10 +417,18 @@ module Akaza
           commands.concat(compile_expr(x, lvars: lvars))
           commands.concat(UNWRAP_COMMANDS)
           commands << [:flow, sym, else_label]
-          commands.concat(compile_expr(else_body, lvars: lvars)) if else_body
+          if else_body
+            commands.concat(compile_expr(else_body, lvars: lvars))
+          else
+            commands << [:stack, :push, NIL]
+          end
           commands << [:flow, :jump, end_label]
           commands << [:flow, :def, else_label]
-          commands.concat(compile_expr(if_body, lvars: lvars)) if if_body
+          if if_body
+            commands.concat(compile_expr(if_body, lvars: lvars))
+          else
+            commands << [:stack, :push, NIL]
+          end
           commands << [:flow, :def, end_label]
         end
 

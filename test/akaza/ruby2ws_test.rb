@@ -252,6 +252,18 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_unshift_return_value
+    assert_eval "123", <<~RUBY
+      addr = [3]
+      addr2 = addr.unshift 2
+      addr.unshift 1
+
+      put_as_number addr.shift
+      put_as_number addr.shift
+      put_as_number addr2.shift
+    RUBY
+  end
+
   def test_transpile_array_def
     assert_eval "123", <<~RUBY
       def shift(array)
