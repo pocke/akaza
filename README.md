@@ -124,6 +124,12 @@ a.sum(input, output)
 p output.string # => "42"
 ```
 
+## Convert Ruby to Whitespace
+
+You can convert Ruby to Whitespace. It is an easy way to write Whitespace.
+
+See https://github.com/pocke/akaza/blob/master/doc/ruby2ws.md
+
 ## Development
 
 After checking out the repo, run `bin/setup` to install dependencies. You can also run `bin/console` for an interactive prompt that will allow you to experiment.

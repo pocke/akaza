@@ -81,6 +81,8 @@ put_as_number 42  # => 42
 
 You can use Array. It is implemented as a linked list.
 
+Must not access to out of range of array.
+
 ```ruby
 x = [1, 2, 3]
 put_as_number x[0]
@@ -93,7 +95,26 @@ It support only a few methods.
 * `[]`
 * `[]=`
 
+### Hash
 
+You can use Hash. It is implemented with Hash table and use chaining to resolve collision.
+
+Must not access to out of range of hash.
+
+```ruby
+x = {
+  1 => 2,
+  3 => 4,
+}
+
+x[5] = 6
+put_as_number x[1] # => 2
+```
+
+It supports only a few methods.
+
+* `[]`
+* `[]=`
 
 ### Local variables
 
