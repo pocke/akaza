@@ -325,10 +325,11 @@ module Akaza
           # initialize_hash sets the return value to bottom of the stack.
           commands.concat(initialize_hash(hash_addr))
 
-          no_collision_label = ident_to_label(nil)
-          when_collision_label = ident_to_label(nil)
-
           pairs.each_slice(2) do |key, value|
+            no_collision_label = ident_to_label(nil)
+            check_collision_label = ident_to_label(nil)
+            when_not_allocated = ident_to_label(nil)
+
             commands.concat(compile_expr(key))
             # calc hash
             commands << [:stack, :dup]
@@ -344,7 +345,7 @@ module Akaza
             # stack: [key, key_addr]
 
             # Check collision
-            commands << [:flow, :def, when_collision_label]
+            commands << [:flow, :def, check_collision_label]
             commands << [:stack, :dup]
             commands << [:heap, :load]
             commands << [:stack, :push, NONE]
@@ -357,9 +358,20 @@ module Akaza
             commands << [:stack, :push, 2]
             commands << [:calc, :add]
             # stack: [key, next_addr]
+            commands << [:stack, :dup]
+            commands << [:stack, :push, NONE_ADDR]
+            commands << [:calc, :sub]
+            commands << [:flow, :jump_if_zero, when_not_allocated]
+
+            # when next field is already allocated
             commands << [:heap, :load]
             # stack: [key, next_key_addr]
-            commands << [:flow, :jump, when_collision_label]
+            commands << [:flow, :jump, check_collision_label]
+
+            # when next field is not allocated
+            commands << [:flow, :def, when_not_allocated]
+            # TODO: allocate new hash item
+            commands << [:flow, :jump, check_collision_label]
 
             commands << [:flow, :def, no_collision_label]
             # End check collision

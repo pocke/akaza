@@ -346,10 +346,9 @@ class Ruby2wsTest < Minitest::Test
   end
 
   def test_transpile_hash_ref_with_collision
-    assert_eval '100', <<~RUBY
+    assert_eval '42', <<~RUBY
       x = {
         1 => 42,   # 1 mod 11 = 1
-        2 => 3,    # 2 mod 11 = 2
         12 => 100, # 12 mod 11 = 1
       }
       put_as_number x[1]
