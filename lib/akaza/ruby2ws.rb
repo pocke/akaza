@@ -616,7 +616,8 @@ module Akaza
       private def hash_index_access_label
         @hash_index_access_label ||= (
           label = ident_to_label(nil)
-          key_same_label = ident_to_label(nil)
+          key_not_collision_label = ident_to_label(nil)
+          check_key_equivalent_label = ident_to_label(nil)
 
           commands = []
           commands << [:flow, :def, label]
@@ -639,17 +640,26 @@ module Akaza
 
           commands << [:calc, :add]
           # stack: [addr_of_target_key]
+
+          # Check key equivalent
+          commands << [:flow, :def, check_key_equivalent_label]
           commands << [:stack, :dup]
           commands << [:heap, :load]
           commands.concat(LOAD_TMP_COMMANDS)
           # stack: [addr_of_target_key, target_key, key]
           commands << [:calc, :sub]
-          commands << [:flow, :jump_if_zero, key_same_label]
+          commands << [:flow, :jump_if_zero, key_not_collision_label]
           # stack: [addr_of_target_key]
 
-          # TODO: when key is not same
+          # when collistion
+          commands << [:stack, :push, 2]
+          commands << [:calc, :add]
+          # stack: [addr_of_next_key_addr]
+          commands << [:heap, :load]
+          # stack: [next_key_addr]
+          commands << [:flow, :jump, check_key_equivalent_label]
 
-          commands << [:flow, :def, key_same_label]
+          commands << [:flow, :def, key_not_collision_label]
           commands << [:stack, :push, 1]
           commands << [:calc, :add]
           # stack: [addr_of_target_value]

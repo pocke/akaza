@@ -345,6 +345,17 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_hash_ref_with_collision
+    assert_eval '100', <<~RUBY
+      x = {
+        1 => 42,   # 1 mod 11 = 1
+        2 => 3,    # 2 mod 11 = 2
+        12 => 100, # 12 mod 11 = 1
+      }
+      put_as_number x[1]
+    RUBY
+  end
+
   def assert_eval(expected_output, code, input = StringIO.new(''))
     ws = Akaza::Ruby2ws::Transpiler.new(code).transpile
     out = StringIO.new
