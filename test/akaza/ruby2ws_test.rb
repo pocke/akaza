@@ -370,6 +370,20 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_hash_nested
+    assert_eval '2,5', <<~RUBY
+      x = {
+        1 => 2,
+        3 => {
+          4 => 5,
+        },
+      }
+      put_as_number x[1]
+      put_as_char ','
+      put_as_number x[3][4]
+    RUBY
+  end
+
   def assert_eval(expected_output, code, input = StringIO.new(''))
     ws = Akaza::Ruby2ws::Transpiler.new(code).transpile
     out = StringIO.new
