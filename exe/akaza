@@ -1,0 +1,22 @@
+#!ruby
+
+require 'akaza'
+
+# TODO: Move it to Akaza::CLI
+
+def usage
+  puts "Usage: akaza exec|wsrb|exec_wsrb FILE_NAME"
+end
+
+case ARGV
+in ['exec', path]
+  Akaza.eval(File.read(path))
+in ['wsrb', path]
+  print Akaza::Ruby2ws.ruby_to_ws(File.read(path))
+in ['exec_wsrb', path]
+  ws = Akaza::Ruby2ws.ruby_to_ws(File.read(path))
+  Akaza.eval(ws)
+else
+  usage
+  exit 1
+end
