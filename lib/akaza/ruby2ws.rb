@@ -38,6 +38,7 @@ module Akaza
 
     NONE_ADDR = 0
     TMP_ADDR = 1
+    HEAP_COUNT_ADDR = 2
 
     TYPE_BITS = 2
 
@@ -75,11 +76,22 @@ module Akaza
       [:stack, :push, TMP_ADDR],
       [:stack, :swap],
       [:heap, :save],
-    ]
+    ].freeze
     LOAD_TMP_COMMANDS = [
       [:stack, :push, TMP_ADDR],
       [:heap, :load],
-    ]
+    ].freeze
+    # Allocate heap and push allocated address to the stack
+    ALLOCATE_HEAP_COMMANDS = [
+      [:stack, :push, HEAP_COUNT_ADDR],
+      [:heap, :load],
+      [:stack, :push, 1],
+      [:calc, :add],
+      [:stack, :dup],
+      [:stack, :push, HEAP_COUNT_ADDR],
+      [:stack, :swap],
+      [:heap, :save],
+    ].freeze
 
     class ParseError < StandardError; end
 
@@ -91,8 +103,8 @@ module Akaza
       def initialize(ruby_code)
         @ruby_code = ruby_code
 
-        @addr_index = 1
-        @addrs = {}
+        @variable_addr_index = 2
+        @variable_addrs = {}
 
         @label_index = 0
         @labels = {}
@@ -103,7 +115,15 @@ module Akaza
 
       def transpile
         ast = RubyVM::AbstractSyntaxTree.parse(@ruby_code)
-        commands = compile_expr(ast)
+        commands = []
+        body = compile_expr(ast)
+
+        # Reserve heaps for local variables
+        commands << [:stack, :push, HEAP_COUNT_ADDR]
+        commands << [:stack, :push, @variable_addr_index + 1]
+        commands << [:heap, :save]
+
+        commands.concat body
         commands << [:flow, :exit]
         commands.concat(*@methods)
         commands_to_ws(commands)
@@ -195,7 +215,7 @@ module Akaza
         in [:LASGN, var, arg]
           commands.concat(compile_expr(arg))
           commands << [:stack, :dup]
-          var_addr = ident_to_addr(var)
+          var_addr = variable_name_to_addr(var)
           commands << [:stack, :push, var_addr]
           commands << [:stack, :swap]
           commands << [:heap, :save]
@@ -232,7 +252,7 @@ module Akaza
             [:flow, :def, ident_to_label(name)],
           ]
           lvar_table[0...args_count].reverse.each do |args_name|
-            m << [:stack, :push, ident_to_addr(args_name)]
+            m << [:stack, :push, variable_name_to_addr(args_name)]
             m << [:stack, :swap]
             m << [:heap, :save]
           end
@@ -288,10 +308,22 @@ module Akaza
           check_char!(str)
           commands << [:stack, :push, with_type(str.ord, TYPE_INT)]
         in [:LVAR, name]
-          commands << [:stack, :push, ident_to_addr(name)]
+          commands << [:stack, :push, variable_name_to_addr(name)]
           commands << [:heap, :load]
         in [:ARRAY, *items, nil]
           array_addr = next_addr_index
+          commands.concat ALLOCATE_HEAP_COMMANDS
+          commands << [:stack, :dup]
+          commands << [:stack, :dup]
+          # stack: [array_addr, array_addr, array_addr]
+          commands << [:stack, :push, 1]
+          commands << [:calc, :add]
+          # stack: [array_addr, array_addr, first_item_addr]
+          commands << [:heap, :save]
+          # stack: [array_addr]
+
+          # TODO
+
           addrs = ((items.size) * 2).times.map { next_addr_index }
           commands << [:stack, :push, array_addr]
           commands << [:stack, :push, addrs[0] || NONE_ADDR]
@@ -312,11 +344,11 @@ module Akaza
 
           commands << [:stack, :push, with_type(array_addr, TYPE_ARRAY)]
         in [:ZARRAY]
-          addr = next_addr_index
-          commands << [:stack, :push, addr]
+          commands.concat ALLOCATE_HEAP_COMMANDS
+          commands << [:stack, :dup]
           commands << [:stack, :push, NONE_ADDR]
           commands << [:heap, :save]
-          commands << [:stack, :push, with_type(addr, TYPE_ARRAY)]
+          commands.concat WRAP_ARRAY_COMMANDS
         in [:HASH, nil]
           hash_addr = next_addr_index
           commands.concat(initialize_hash(hash_addr))
@@ -729,12 +761,12 @@ module Akaza
         end
       end
 
-      private def next_addr_index
-        @addr_index += 1
+      private def variable_addr_index
+        @variable_addr_index += 1
       end
 
-      private def ident_to_addr(ident)
-        @addrs[ident] ||= next_addr_index
+      private def variable_name_to_addr(ident)
+        @variable_addrs[ident] ||= variable_addr_index
       end
 
       private def with_type(val, type)
