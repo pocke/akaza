@@ -41,11 +41,17 @@ module Akaza
 
     TYPE_BITS = 2
 
-    TYPE_NIL   = 0b00
-    TYPE_INT   = 0b01
-    TYPE_ARRAY = 0b10
+    TYPE_SPECIAL = 0b00
+    TYPE_INT     = 0b01
+    TYPE_ARRAY   = 0b10
+    TYPE_HASH    = 0b11
 
-    NIL = 0
+    HASH_SIZE = 11
+
+    # NIL is nil
+    NIL = 0 << TYPE_BITS + TYPE_SPECIAL
+    # NONE is for internal. It does not available for user.
+    NONE = 1 << TYPE_BITS + TYPE_SPECIAL
 
     # Call when stack top is the target number.
     UNWRAP_COMMANDS = [
@@ -263,10 +269,10 @@ module Akaza
         in [:WHILE, cond, body]
           commands.concat(compile_while(cond, body, lvars: lvars))
         in [:LIT, num]
-          commands << [:stack, :push, num_with_type(num)]
+          commands << [:stack, :push, with_type(num, TYPE_INT)]
         in [:STR, str]
           check_char!(str)
-          commands << [:stack, :push, num_with_type(str.ord)]
+          commands << [:stack, :push, with_type(str.ord, TYPE_INT)]
         in [:LVAR, name]
           commands << [:stack, :push, ident_to_addr(name)]
           commands << [:heap, :load]
@@ -290,13 +296,29 @@ module Akaza
             commands << [:heap, :save]
           end
 
-          commands << [:stack, :push, array_with_type(array_addr)]
+          commands << [:stack, :push, with_type(array_addr, TYPE_ARRAY)]
         in [:ZARRAY]
           addr = next_addr_index
           commands << [:stack, :push, addr]
           commands << [:stack, :push, NONE_ADDR]
           commands << [:heap, :save]
-          commands << [:stack, :push, array_with_type(addr)]
+          commands << [:stack, :push, with_type(addr, TYPE_ARRAY)]
+        in [:HASH, nil]
+          hash_addr = next_addr_index
+          addrs = (HASH_SIZE * 3).times.map { next_addr_index }
+
+          addrs.each_slice(3) do |key_addr, value_addr, next_addr|
+            commands << [:stack, :push, key_addr]
+            commands << [:stack, :push, NONE]
+            commands << [:heap, :save]
+          end
+
+          commands << [:stack, :push, hash_addr]
+          commands << [:stack, :push, addrs[0]]
+          commands << [:heap, :save]
+
+          commands << [:stack, :push, with_type(hash_addr, TYPE_HASH)]
+        in [:HASH, [:ARRAY, *pairs, nil]]
         end
 
         commands
@@ -371,7 +393,7 @@ module Akaza
       end
 
       # Compile fcall and vcall
-      private def compile_call(name, args, lvars: lvars)
+      private def compile_call(name, args, lvars:)
         commands = []
         with_storing_lvars(lvars, commands) do
           args.each do |arg|
@@ -512,12 +534,8 @@ module Akaza
         @addrs[ident] ||= next_addr_index
       end
 
-      private def num_with_type(num)
-        (num << TYPE_BITS) + TYPE_INT
-      end
-
-      private def array_with_type(array_addr)
-        (array_addr << TYPE_BITS) + TYPE_ARRAY
+      private def with_type(val, type)
+        (val << TYPE_BITS) + type
       end
     end
   end
