@@ -284,17 +284,17 @@ module Akaza
           # stack: [array, unwrapped_addr_of_array, addr_of_first_item]
 
           # Allocate a new item
-          new_item_value_addr = next_addr_index
-          new_item_addr_addr = next_addr_index
-          commands << [:stack, :push, new_item_value_addr]
+          commands.concat ALLOCATE_HEAP_COMMANDS
+          commands << [:stack, :dup]
           commands.concat(compile_expr(expr))
           commands << [:heap, :save]
-          commands << [:stack, :push, new_item_addr_addr]
+          # stack: [array, unwrapped_addr_of_array, addr_of_first_item, new_item_value_addr]
+          commands << [:stack, :swap]
+          commands.concat ALLOCATE_HEAP_COMMANDS
           commands << [:stack, :swap]
           commands << [:heap, :save]
-          # stack: [array, unwrapped_addr_of_array]
+          # stack: [array, unwrapped_addr_of_array, new_item_value_addr]
 
-          commands << [:stack, :push, new_item_value_addr]
           commands << [:heap, :save]
         in [:IF, cond, if_body, else_body]
           commands.concat(compile_if(cond, if_body, else_body))
@@ -311,7 +311,6 @@ module Akaza
           commands << [:stack, :push, variable_name_to_addr(name)]
           commands << [:heap, :load]
         in [:ARRAY, *items, nil]
-          array_addr = next_addr_index
           commands.concat ALLOCATE_HEAP_COMMANDS
           commands << [:stack, :dup]
           commands << [:stack, :dup]
@@ -322,27 +321,25 @@ module Akaza
           commands << [:heap, :save]
           # stack: [array_addr]
 
-          # TODO
-
-          addrs = ((items.size) * 2).times.map { next_addr_index }
-          commands << [:stack, :push, array_addr]
-          commands << [:stack, :push, addrs[0] || NONE_ADDR]
-          commands << [:heap, :save]
-
           items.each.with_index do |item, index|
-            value_addr = addrs[index * 2]
-            commands << [:stack, :push, value_addr]
-            commands.concat(compile_expr(item))
+            # save value
+            commands.concat ALLOCATE_HEAP_COMMANDS
+            commands.concat compile_expr(item)
             commands << [:heap, :save]
 
-            next_addr = addrs[index * 2 + 1]
-            val = addrs[(index + 1) * 2] || NONE_ADDR
-            commands << [:stack, :push, next_addr]
-            commands << [:stack, :push, val]
+            # save next address
+            commands.concat ALLOCATE_HEAP_COMMANDS
+            if index == items.size - 1
+              commands << [:stack, :push, NONE_ADDR]
+            else
+              commands << [:stack, :dup]
+              commands << [:stack, :push, 1]
+              commands << [:calc, :add]
+            end
             commands << [:heap, :save]
           end
 
-          commands << [:stack, :push, with_type(array_addr, TYPE_ARRAY)]
+          commands.concat WRAP_ARRAY_COMMANDS
         in [:ZARRAY]
           commands.concat ALLOCATE_HEAP_COMMANDS
           commands << [:stack, :dup]
