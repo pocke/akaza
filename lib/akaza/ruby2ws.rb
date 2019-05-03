@@ -70,6 +70,16 @@ module Akaza
       [:stack, :push, TYPE_ARRAY],
       [:calc, :add],
     ].freeze
+    SAVE_TMP_COMMANDS = [
+      [:stack, :dup],
+      [:stack, :push, TMP_ADDR],
+      [:stack, :swap],
+      [:heap, :save],
+    ]
+    LOAD_TMP_COMMANDS = [
+      [:stack, :push, TMP_ADDR],
+      [:heap, :load],
+    ]
 
     class ParseError < StandardError; end
 
@@ -168,11 +178,13 @@ module Akaza
           commands << [:stack, :push, TYPE_ARRAY]
           commands << [:calc, :sub]
           commands << [:flow, :jump_if_zero, label_array] # when array
+
           # when hash
-          # TODO: implement
-          commands << [:stack, :push, NONE] # remove me
+          commands.concat(compile_expr(index))
+          commands << [:flow, :call, hash_index_access_label]
           commands << [:flow, :jump, label_end]
 
+          # when array
           commands << [:flow, :def, label_array]
           commands.concat(compile_expr(index))
           commands << [:flow, :call, array_index_access_label]
@@ -372,8 +384,12 @@ module Akaza
             commands.concat(compile_expr(value))
             # stack: [key_addr, value_addr, value]
             commands << [:heap, :save]
+            # stack: [key_addr]
 
             # Save addr
+            commands << [:stack, :push, 2]
+            commands << [:calc, :add]
+            # stack: [next_addr]
             commands << [:stack, :push, NONE_ADDR]
             commands << [:heap, :save]
           end
@@ -591,7 +607,56 @@ module Akaza
 
           commands << [:flow, :end]
           @methods << commands
+          label
+        )
+      end
 
+      # Hash#[]
+      # stack: [recv, key], they're wrapped.
+      private def hash_index_access_label
+        @hash_index_access_label ||= (
+          label = ident_to_label(nil)
+          key_same_label = ident_to_label(nil)
+
+          commands = []
+          commands << [:flow, :def, label]
+
+          commands << [:stack, :swap]
+          commands.concat(UNWRAP_COMMANDS)
+          commands << [:heap, :load]
+          commands << [:stack, :swap]
+          # stack: [addr_of_first_key, key (wrapped)]
+          commands.concat(SAVE_TMP_COMMANDS)
+
+          # calc hash
+          # stack: [addr_of_first_key, key (wrapped)]
+          commands.concat(UNWRAP_COMMANDS)
+          commands << [:stack, :push, HASH_SIZE]
+          commands << [:calc, :mod]
+          commands << [:stack, :push, 3]
+          commands << [:calc, :multi]
+          # stack: [addr_of_first_key, hash]
+
+          commands << [:calc, :add]
+          # stack: [addr_of_target_key]
+          commands << [:stack, :dup]
+          commands << [:heap, :load]
+          commands.concat(LOAD_TMP_COMMANDS)
+          # stack: [addr_of_target_key, target_key, key]
+          commands << [:calc, :sub]
+          commands << [:flow, :jump_if_zero, key_same_label]
+          # stack: [addr_of_target_key]
+
+          # TODO: when key is not same
+
+          commands << [:flow, :def, key_same_label]
+          commands << [:stack, :push, 1]
+          commands << [:calc, :add]
+          # stack: [addr_of_target_value]
+          commands << [:heap, :load]
+
+          commands << [:flow, :end]
+          @methods << commands
           label
         )
       end

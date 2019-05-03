@@ -338,6 +338,13 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_hash_ref
+    assert_eval '42', <<~RUBY
+      x = { 1 => 42 }
+      put_as_number x[1]
+    RUBY
+  end
+
   def assert_eval(expected_output, code, input = StringIO.new(''))
     ws = Akaza::Ruby2ws::Transpiler.new(code).transpile
     out = StringIO.new
