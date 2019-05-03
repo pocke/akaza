@@ -98,6 +98,16 @@ module Akaza
       [:stack, :swap],
       [:heap, :save],
     ].freeze
+    ALLOCATE_NEW_HASH_ITEM_COMMANDS = [
+      *ALLOCATE_HEAP_COMMANDS,
+      [:stack, :dup],
+      [:stack, :push, NONE],
+      [:heap, :save],
+      *ALLOCATE_HEAP_COMMANDS,
+      [:stack, :pop],
+      *ALLOCATE_HEAP_COMMANDS,
+      [:stack, :pop],
+    ].freeze
 
     class ParseError < StandardError; end
 
@@ -396,9 +406,11 @@ module Akaza
             commands << [:calc, :add]
             # stack: [key, next_addr]
             commands << [:stack, :dup]
+            commands << [:heap, :load]
             commands << [:stack, :push, NONE_ADDR]
             commands << [:calc, :sub]
             commands << [:flow, :jump_if_zero, when_not_allocated]
+            # stack: [key, next_addr]
 
             # when next field is already allocated
             commands << [:heap, :load]
@@ -407,7 +419,12 @@ module Akaza
 
             # when next field is not allocated
             commands << [:flow, :def, when_not_allocated]
-            # TODO: allocate new hash item
+            # stack: [key, next_addr]
+            commands << [:stack, :dup]
+            commands.concat ALLOCATE_NEW_HASH_ITEM_COMMANDS
+            commands << [:heap, :save]
+            commands << [:heap, :load]
+
             commands << [:flow, :jump, check_collision_label]
 
             commands << [:flow, :def, no_collision_label]
@@ -720,15 +737,7 @@ module Akaza
         commands.concat ALLOCATE_HEAP_COMMANDS
 
         HASH_SIZE.times do
-          commands.concat ALLOCATE_HEAP_COMMANDS
-          commands << [:stack, :push, NONE]
-          commands << [:heap, :save]
-
-          # allocate for hash value
-          commands.concat ALLOCATE_HEAP_COMMANDS
-          commands << [:stack, :pop]
-          # allocate for next addr
-          commands.concat ALLOCATE_HEAP_COMMANDS
+          commands.concat ALLOCATE_NEW_HASH_ITEM_COMMANDS
           commands << [:stack, :pop]
         end
 
