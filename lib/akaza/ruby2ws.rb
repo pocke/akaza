@@ -71,6 +71,12 @@ module Akaza
       [:stack, :push, TYPE_ARRAY],
       [:calc, :add],
     ].freeze
+    WRAP_HASH_COMMANDS = [
+      [:stack, :push, 2 ** TYPE_BITS],
+      [:calc, :multi],
+      [:stack, :push, TYPE_HASH],
+      [:calc, :add],
+    ].freeze
     SAVE_TMP_COMMANDS = [
       [:stack, :dup],
       [:stack, :push, TMP_ADDR],
@@ -347,12 +353,12 @@ module Akaza
           commands << [:heap, :save]
           commands.concat WRAP_ARRAY_COMMANDS
         in [:HASH, nil]
-          hash_addr = next_addr_index
-          commands.concat(initialize_hash(hash_addr))
+          commands.concat initialize_hash
         in [:HASH, [:ARRAY, *pairs, nil]]
-          hash_addr = next_addr_index
-          # initialize_hash sets the return value to bottom of the stack.
-          commands.concat(initialize_hash(hash_addr))
+          commands.concat initialize_hash
+          commands.concat SAVE_TMP_COMMANDS
+          # stack: [hash_object (unwrapped)]
+          # tmp: hash_object (unwrapped)
 
           pairs.each_slice(2) do |key, value|
             no_collision_label = ident_to_label(nil)
@@ -369,7 +375,9 @@ module Akaza
             commands << [:calc, :multi]
             # stack: [key, hash]
 
-            commands << [:stack, :push, hash_addr + 1] # hash_addr + 1 is the first item's address.
+            commands.concat LOAD_TMP_COMMANDS
+            commands << [:stack, :push, 1]
+            commands << [:calc, :add] # hash_addr + 1 is the first item's address.
             commands << [:calc, :add]
             # stack: [key, key_addr]
 
@@ -405,33 +413,27 @@ module Akaza
             commands << [:flow, :def, no_collision_label]
             # End check collision
 
-            # Save key
-            commands << [:stack, :dup]
-            commands << [:stack, :push, TMP_ADDR]
-            commands << [:stack, :swap]
-            commands << [:heap, :save]
             # stack: [key, key_addr]
-            commands << [:stack, :swap]
-            commands << [:heap, :save]
-            # stack: []
-
             # Save value
-            commands << [:stack, :push, TMP_ADDR]
-            commands << [:heap, :load]
             commands << [:stack, :dup]
-            # stack: [key_addr, key_addr]
             commands << [:stack, :push, 1]
             commands << [:calc, :add]
             commands.concat(compile_expr(value))
-            # stack: [key_addr, value_addr, value]
+            # stack: [key, key_addr, value_addr, value]
             commands << [:heap, :save]
-            # stack: [key_addr]
+            # stack: [key, key_addr]
 
-            # Save addr
+            # Save next addr
+            commands << [:stack, :dup]
             commands << [:stack, :push, 2]
             commands << [:calc, :add]
-            # stack: [next_addr]
+            # stack: [key, key_addr, next_addr]
             commands << [:stack, :push, NONE_ADDR]
+            commands << [:heap, :save]
+            # stack: [key, key_addr]
+
+            # Save key
+            commands << [:stack, :swap]
             commands << [:heap, :save]
           end
         end
@@ -712,22 +714,33 @@ module Akaza
         )
       end
 
-      private def initialize_hash(hash_addr)
+      private def initialize_hash
         commands = []
+        # Allocate for Hash
+        commands.concat ALLOCATE_HEAP_COMMANDS
 
-        addrs = (HASH_SIZE * 3).times.map { next_addr_index }
-
-        addrs.each_slice(3) do |key_addr, _value_addr, _next_addr|
-          commands << [:stack, :push, key_addr]
+        HASH_SIZE.times do
+          commands.concat ALLOCATE_HEAP_COMMANDS
           commands << [:stack, :push, NONE]
           commands << [:heap, :save]
+
+          # allocate for hash value
+          commands.concat ALLOCATE_HEAP_COMMANDS
+          commands << [:stack, :pop]
+          # allocate for next addr
+          commands.concat ALLOCATE_HEAP_COMMANDS
+          commands << [:stack, :pop]
         end
 
-        commands << [:stack, :push, hash_addr]
-        commands << [:stack, :push, addrs[0]]
+        # stack: [hash_addr]
+        commands << [:stack, :dup]
+        commands << [:stack, :dup]
+        commands << [:stack, :push, 1]
+        commands << [:calc, :add]
         commands << [:heap, :save]
+        # stack: [hash_addr]
 
-        commands << [:stack, :push, with_type(hash_addr, TYPE_HASH)]
+        commands.concat(WRAP_HASH_COMMANDS)
 
         commands
       end
