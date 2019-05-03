@@ -47,7 +47,7 @@ module Akaza
     TYPE_ARRAY   = 0b10
     TYPE_HASH    = 0b11
 
-    HASH_SIZE = 3
+    HASH_SIZE = 11
 
     # NIL is nil
     NIL = 0 << TYPE_BITS + TYPE_SPECIAL
