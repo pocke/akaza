@@ -643,6 +643,13 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_prelude_array_first
+    assert_eval '3', <<~RUBY
+      x = [3, 2, 1]
+      put_as_number x.first
+    RUBY
+  end
+
   def assert_eval(expected_output, code, input = StringIO.new(''))
     ws = Akaza::Ruby2ws.ruby_to_ws(code)
     out = StringIO.new

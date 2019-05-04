@@ -112,6 +112,9 @@ module Akaza
       [:stack, :pop],
     ].freeze
 
+    prelude_path = File.expand_path('./ruby2ws/prelude.rb', __dir__)
+    PRELUDE_AST = RubyVM::AbstractSyntaxTree.parse(File.read(prelude_path))
+
     class ParseError < StandardError; end
 
     def self.ruby_to_ws(ruby_code, path: '(eval)')
@@ -144,7 +147,6 @@ module Akaza
       end
 
       def transpile
-        ast = RubyVM::AbstractSyntaxTree.parse(@ruby_code)
         commands = []
         # define built-in functions
         define_array_shift
@@ -153,6 +155,10 @@ module Akaza
         define_array_attr_asgn
         define_hash_ref
 
+        # Prelude
+        commands.concat compile_expr(PRELUDE_AST)
+
+        ast = RubyVM::AbstractSyntaxTree.parse(@ruby_code)
         body = compile_expr(ast)
 
         # Save self for top level
