@@ -192,6 +192,26 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_lteq
+    assert_eval "123", <<~RUBY
+      x = 42
+      put_as_number 1 if x <= 52
+      put_as_number 999 if 52 <= x
+      put_as_number 2 if -10 <= -5
+      put_as_number 3 if 3 <= 3
+    RUBY
+  end
+
+  def test_transpile_gteq
+    assert_eval "123", <<~RUBY
+      x = 42
+      put_as_number 1 if 52 >= x
+      put_as_number 999 if x >= 52
+      put_as_number 2 if -10 >= -40
+      put_as_number 3 if 3 >= 3
+    RUBY
+  end
+
   def test_transpile_not
     assert_eval 'ft', <<~RUBY
       if !3
