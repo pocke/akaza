@@ -236,6 +236,13 @@ module Akaza
           commands << [:stack, :swap]
           commands << [:heap, :save]
           lvars << var_addr
+        in [:CDECL, var, arg]
+          commands.concat(compile_expr(arg))
+          commands << [:stack, :dup]
+          var_addr = variable_name_to_addr(var)
+          commands << [:stack, :push, var_addr]
+          commands << [:stack, :swap]
+          commands << [:heap, :save]
         in [:ATTRASGN, recv, :[]=, [:ARRAY, index, value, nil]]
           commands.concat(compile_expr(recv))
           commands.concat(UNWRAP_COMMANDS)
@@ -324,6 +331,9 @@ module Akaza
           check_char!(str)
           commands << [:stack, :push, with_type(str.ord, TYPE_INT)]
         in [:LVAR, name]
+          commands << [:stack, :push, variable_name_to_addr(name)]
+          commands << [:heap, :load]
+        in [:CONST, name]
           commands << [:stack, :push, variable_name_to_addr(name)]
           commands << [:heap, :load]
         in [:ARRAY, *items, nil]

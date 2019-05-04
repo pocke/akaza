@@ -83,6 +83,19 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_const
+    assert_eval "4242", <<~RUBY
+      X = 42
+
+      def foo
+        put_as_number X
+      end
+
+      foo
+      put_as_number X
+    RUBY
+  end
+
   def test_transpile_if
     assert_eval "42", <<~RUBY
       x = 0
