@@ -146,6 +146,9 @@ module Akaza
       def transpile
         ast = RubyVM::AbstractSyntaxTree.parse(@ruby_code)
         commands = []
+        # define built-in functions
+        define_array_unshift
+
         body = compile_expr(ast)
 
         # Save self for top level
@@ -379,29 +382,6 @@ module Akaza
           commands << [:stack, :push, variable_name_to_addr(:self)]
           commands << [:heap, :load]
           commands.concat compile_call_with_recv(name, args, error_target_node: node, explicit_self: true)
-        in [:CALL, recv, :unshift, [:ARRAY, expr, nil]]
-          commands.concat(compile_expr(recv))
-          commands << [:stack, :dup]
-          commands.concat(UNWRAP_COMMANDS)
-          # stack: [array, unwrapped_addr_of_array]
-
-          commands << [:stack, :dup]
-          commands << [:heap, :load]
-          # stack: [array, unwrapped_addr_of_array, addr_of_first_item]
-
-          # Allocate a new item
-          commands.concat ALLOCATE_HEAP_COMMANDS
-          commands << [:stack, :dup]
-          commands.concat(compile_expr(expr))
-          commands << [:heap, :save]
-          # stack: [array, unwrapped_addr_of_array, addr_of_first_item, new_item_value_addr]
-          commands << [:stack, :swap]
-          commands.concat ALLOCATE_HEAP_COMMANDS
-          commands << [:stack, :swap]
-          commands << [:heap, :save]
-          # stack: [array, unwrapped_addr_of_array, new_item_value_addr]
-
-          commands << [:heap, :save]
         in [:CALL, recv, name, [:ARRAY, *args, nil]]
           commands.concat compile_expr(recv)
           commands.concat compile_call_with_recv(name, args, error_target_node: recv, explicit_self: true)
@@ -1262,6 +1242,54 @@ module Akaza
           @methods << commands
           label
         )
+      end
+
+      # Array#unshift
+      # stack: [arg, recv]
+      private def define_array_unshift
+        label = ident_to_label(:'Array#unshift')
+        self_addr = variable_name_to_addr(:self)
+        commands = []
+        commands << [:flow, :def, label]
+
+        # Restore self
+        commands << [:stack, :push, self_addr]
+        commands << [:stack, :swap]
+        commands << [:heap, :save]
+        # stack: [arg]
+        commands.concat SAVE_TMP_COMMANDS
+        commands << [:stack, :pop]
+        # stack: []
+
+        commands << [:stack, :push, self_addr]
+        commands << [:heap, :load]
+        commands.concat(UNWRAP_COMMANDS)
+        # stack: [unwrapped_addr_of_array]
+
+        commands << [:stack, :dup]
+        commands << [:heap, :load]
+        # stack: [unwrapped_addr_of_array, addr_of_first_item]
+
+        # Allocate a new item
+        commands.concat ALLOCATE_HEAP_COMMANDS
+        commands << [:stack, :dup]
+        commands.concat LOAD_TMP_COMMANDS
+        commands << [:heap, :save]
+        # stack: [unwrapped_addr_of_array, addr_of_first_item, new_item_value_addr]
+        commands << [:stack, :swap]
+        commands.concat ALLOCATE_HEAP_COMMANDS
+        # stack: [unwrapped_addr_of_array, new_item_value_addr, addr_of_first_item, new_item_next_addr_addr]
+        commands << [:stack, :swap]
+        commands << [:heap, :save]
+        # stack: [unwrapped_addr_of_array, new_item_value_addr]
+        commands << [:heap, :save]
+
+        commands << [:stack, :push, self_addr]
+        commands << [:heap, :load]
+        # stack: [self]
+        commands << [:flow, :end]
+        @methods << commands
+        label
       end
 
       private def check_char!(char)

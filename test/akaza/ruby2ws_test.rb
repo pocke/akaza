@@ -132,6 +132,20 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_class_fcall_2
+    assert_eval "40", <<~RUBY
+      class Array
+        def prepend(x)
+          unshift(x)
+        end
+      end
+
+      x = []
+      x.prepend(40)
+      put_as_number x[0]
+    RUBY
+  end
+
   def test_transpile_class_braces
     skip
     assert_eval "20", <<~RUBY
