@@ -49,10 +49,12 @@ module Akaza
 
     HASH_SIZE = 11
 
-    # NIL is nil
-    NIL = 0 << TYPE_BITS + TYPE_SPECIAL
+    FALSE = 0 << TYPE_BITS + TYPE_SPECIAL
     # NONE is for internal. It does not available for user.
     NONE = 1 << TYPE_BITS + TYPE_SPECIAL
+    TRUE = 2 << TYPE_BITS + TYPE_SPECIAL
+    # NIL is nil
+    NIL = 4 << TYPE_BITS + TYPE_SPECIAL
 
     # Call when stack top is the target number.
     UNWRAP_COMMANDS = [

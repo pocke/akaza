@@ -76,7 +76,7 @@ class Ruby2wsTest < Minitest::Test
   end
 
   def test_transpile_def_return_nil
-    assert_eval "0", <<~RUBY
+    assert_eval "4", <<~RUBY
       put_as_number(def foo() 1 end)
     RUBY
   end
@@ -123,8 +123,8 @@ class Ruby2wsTest < Minitest::Test
   end
 
   def test_transpile_if3
-    assert_eval "0", <<~RUBY
-      put_as_number((42 if 1 == 0)) # It returns nil, and nil is evaluated as 0.
+    assert_eval "4", <<~RUBY
+      put_as_number((42 if 1 == 0)) # It returns nil, and nil is evaluated as 4.
     RUBY
   end
 
