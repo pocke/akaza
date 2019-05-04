@@ -82,12 +82,16 @@ class Ruby2wsTest < Minitest::Test
   end
 
   def test_transpile_class
-    assert_eval "", <<~RUBY
-      class Integer
+    assert_eval "40", <<~RUBY
+      class Array
         def prepend(x)
           self.unshift(x)
         end
       end
+
+      x = []
+      x.prepend(40)
+      put_as_number x[0]
     RUBY
   end
 

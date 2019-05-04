@@ -128,6 +128,7 @@ module Akaza
         @label_index = 0
         @labels = {}
 
+        # Array<Array<Command>>
         @methods = []
         @lvars_stack = [[variable_name_to_addr(:self)]]
 
@@ -314,8 +315,9 @@ module Akaza
           commands << [:heap, :load]
         in [:DEFN, name, [:SCOPE, lvar_table, [:ARGS, args_count ,*_], body]]
           self_addr = variable_name_to_addr(:self)
+          label = @current_class ? ident_to_label(:"#{@current_class}##{name}") : ident_to_label(name)
           m = [
-            [:flow, :def, ident_to_label(name)],
+            [:flow, :def, label],
 
             # Restore self
             [:stack, :push, self_addr],
@@ -393,8 +395,50 @@ module Akaza
 
           commands << [:heap, :save]
         in [:CALL, recv, name, [:ARRAY, *args, nil]]
-          self_commands = compile_expr(recv)
-          commands.concat compile_call(name, args, self_commands)
+          is_int_label = ident_to_label(nil)
+          is_array_label = ident_to_label(nil)
+          is_hash_label = ident_to_label(nil)
+          end_label = ident_to_label(nil)
+
+          commands.concat compile_expr(recv)
+          commands.concat SAVE_TMP_COMMANDS
+          # stack: [recv]
+
+          self_commands = LOAD_TMP_COMMANDS
+
+          # is_a?(Integer)
+          commands << [:stack, :push, TYPE_INT]
+          commands << [:flow, :call, is_a_label]
+          commands << [:flow, :jump_if_zero, is_int_label]
+
+          # is_a?(Array)
+          commands << [:stack, :push, TYPE_ARRAY]
+          commands.concat LOAD_TMP_COMMANDS
+          commands << [:flow, :call, is_a_label]
+          commands << [:flow, :jump_if_zero, is_array_label]
+
+          # is_a?(Hash)
+          commands << [:stack, :push, TYPE_HASH]
+          commands.concat LOAD_TMP_COMMANDS
+          commands << [:flow, :call, is_a_label]
+          commands << [:flow, :jump_if_zero, is_hash_label]
+
+          # Other
+          # TODO: raise error!
+          commands << [:flow, :exit]
+
+          commands << [:flow, :def, is_int_label]
+          commands.concat compile_call(:"Integer##{name}", args, self_commands)
+          commands << [:flow, :jump, end_label]
+
+          commands << [:flow, :def, is_array_label]
+          commands.concat compile_call(:"Array##{name}", args, self_commands)
+          commands << [:flow, :jump, end_label]
+
+          commands << [:flow, :def, is_hash_label]
+          commands.concat compile_call(:"Hash##{name}", args, self_commands)
+
+          commands << [:flow, :def, end_label]
         in [:IF, cond, if_body, else_body]
           commands.concat(compile_if(cond, if_body, else_body))
         in [:UNLESS, cond, else_body, if_body]
@@ -1129,6 +1173,27 @@ module Akaza
           commands << [:stack, :push, falsy]
 
           commands << [:flow, :def, end_label]
+          commands << [:flow, :end]
+          @methods << commands
+          label
+        )
+      end
+
+      # stack: [type, val]
+      # return stack: [int]
+      #   if val is a type then 0
+      #   if not then other int
+      private def is_a_label
+        @is_a_label ||= (
+          label = ident_to_label(nil)
+
+          commands = []
+          commands << [:flow, :def, label]
+
+          commands << [:stack, :push, 2 ** TYPE_BITS]
+          commands << [:calc, :mod]
+          commands << [:calc, :sub]
+
           commands << [:flow, :end]
           @methods << commands
           label
