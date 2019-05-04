@@ -147,6 +147,7 @@ module Akaza
         ast = RubyVM::AbstractSyntaxTree.parse(@ruby_code)
         commands = []
         # define built-in functions
+        define_array_shift
         define_array_unshift
         define_array_ref
         define_hash_ref
@@ -238,29 +239,6 @@ module Akaza
           commands.concat(UNWRAP_COMMANDS)
           commands << [:calc, com]
           commands.concat(WRAP_NUMBER_COMMANDS)
-        in [:CALL, expr, :shift, nil]
-          commands.concat(compile_expr(expr))
-          commands.concat(UNWRAP_COMMANDS)
-          # stack: [unwrapped_addr_of_array]
-
-          commands << [:stack, :dup]
-          commands << [:heap, :load]
-          # stack: [unwrapped_addr_of_array, addr_of_first_item]
-          commands << [:stack, :swap]
-          commands << [:stack, :dup]
-          commands << [:heap, :load]
-          # stack: [addr_of_first_item, unwrapped_addr_of_array, addr_of_first_item]
-
-          commands << [:stack, :push, 1]
-          commands << [:calc, :add]
-          commands << [:heap, :load]
-          # stack: [addr_of_first_item, unwrapped_addr_of_array, addr_of_second_item]
-
-          commands << [:heap, :save]
-          # stack: [addr_of_first_item]
-
-          commands << [:heap, :load]
-          # stack: [first_item]
         in [:VCALL, :exit]
           commands << [:flow, :exit]
         in [:LASGN, var, arg]
@@ -850,6 +828,28 @@ module Akaza
         commands
       end
 
+      # stack: [self]
+      # return stack: [self]
+      private def save_to_self_commands
+        commands = []
+        self_addr = variable_name_to_addr(:self)
+        commands << [:stack, :dup]
+        commands << [:stack, :push, self_addr]
+        commands << [:stack, :swap]
+        commands << [:heap, :save]
+        commands
+      end
+
+      # stack: []
+      # return stack: [self]
+      private def load_from_self_commands
+        commands = []
+        self_addr = variable_name_to_addr(:self)
+        commands << [:stack, :push, self_addr]
+        commands << [:heap, :load]
+        commands
+      end
+
       # stack: [left, right]
       # return stack: [TRUE/FALSE]
       private def op_eqeq_label
@@ -1124,6 +1124,39 @@ module Akaza
           @methods << commands
           label
         )
+      end
+
+      # Array#shift
+      # stack: [recv]
+      private def define_array_shift
+        label = ident_to_label(:'Array#shift')
+        self_addr = variable_name_to_addr(:self)
+        commands = []
+        commands << [:flow, :def, label]
+
+        commands.concat save_to_self_commands
+
+        commands.concat(UNWRAP_COMMANDS)
+        commands << [:stack, :dup]
+        commands << [:heap, :load]
+        # stack: [unwrapped_addr_of_array, addr_of_first_item]
+        commands << [:stack, :swap]
+        commands << [:stack, :dup]
+        commands << [:heap, :load]
+        # stack: [addr_of_first_item, unwrapped_addr_of_array, addr_of_first_item]
+
+        commands << [:stack, :push, 1]
+        commands << [:calc, :add]
+        commands << [:heap, :load]
+        # stack: [addr_of_first_item, unwrapped_addr_of_array, addr_of_second_item]
+
+        commands << [:heap, :save]
+        # stack: [addr_of_first_item]
+
+        commands << [:heap, :load]
+        commands << [:flow, :end]
+        # stack: [first_item]
+        @methods << commands
       end
 
       # Array#unshift

@@ -132,6 +132,19 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_class_fcall_shift
+    assert_eval "40", <<~RUBY
+      class Array
+        def shift2
+          shift
+        end
+      end
+
+      x = [40]
+      put_as_number x.shift2
+    RUBY
+  end
+
   def test_transpile_class_fcall_unshift
     assert_eval "40", <<~RUBY
       class Array
