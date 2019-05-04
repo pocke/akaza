@@ -18,6 +18,14 @@ class Ruby2wsTest < Minitest::Test
     assert_eval "a", "put_as_char 'a'"
   end
 
+  def test_transpile_raise
+    assert_eval "x(eval):2:0: Foobar (Error)\n", <<~RUBY
+      put_as_char 'x'
+      raise "Foobar"
+      put_as_char 'y'
+    RUBY
+  end
+
   def test_transpile_def
     assert_eval "42", "def put_42() put_as_number(42) end; put_42"
   end
@@ -78,6 +86,108 @@ class Ruby2wsTest < Minitest::Test
   def test_transpile_def_return_nil
     assert_eval "4", <<~RUBY
       put_as_number(def foo() 1 end)
+    RUBY
+  end
+
+  def test_transpile_class
+    assert_eval "40,42", <<~RUBY
+      class Array
+        def prepend(x)
+          self.unshift(x)
+        end
+      end
+
+      class Integer
+        def wrap_array
+          [self]
+        end
+      end
+
+      x = []
+      x.prepend(40)
+      put_as_number x[0]
+
+      put_as_char ','
+
+      a = 42.wrap_array
+      put_as_number a[0]
+    RUBY
+  end
+
+  def test_transpile_class_fcall_1
+    assert_eval "40", <<~RUBY
+      class Array
+        def prepend(x)
+          self.unshift(x)
+        end
+
+        def prepend2(x)
+          prepend(x)
+        end
+      end
+
+      x = []
+      x.prepend2(40)
+      put_as_number x[0]
+    RUBY
+  end
+
+  def test_transpile_class_fcall_shift
+    assert_eval "40", <<~RUBY
+      class Array
+        def shift2
+          shift
+        end
+      end
+
+      x = [40]
+      put_as_number x.shift2
+    RUBY
+  end
+
+  def test_transpile_class_fcall_unshift
+    assert_eval "40", <<~RUBY
+      class Array
+        def prepend(x)
+          unshift(x)
+        end
+      end
+
+      x = []
+      x.prepend(40)
+      put_as_number x[0]
+    RUBY
+  end
+
+  def test_transpile_class_fcall_array_ref
+    assert_eval "y", <<~RUBY
+      class Array
+        def fetch(key)
+          self[key]
+        end
+      end
+
+      array = ['x', 'y', 'z']
+      put_as_char array.fetch(1)
+    RUBY
+  end
+
+  def test_transpile_class_fcall_hash_ref
+    assert_eval "20", <<~RUBY
+      class Hash
+        def fetch(key)
+          self[key]
+        end
+      end
+
+      hash = { 1 => 20, 3 => 40 }
+      put_as_number hash.fetch(1)
+    RUBY
+  end
+
+  def test_transpile_class_error
+    assert_eval "(eval):1:0: Unknown type of receiver (Error)\n", <<~RUBY
+      nil.unknown_method
     RUBY
   end
 
@@ -533,8 +643,15 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_prelude_array_first
+    assert_eval '3', <<~RUBY
+      x = [3, 2, 1]
+      put_as_number x.first
+    RUBY
+  end
+
   def assert_eval(expected_output, code, input = StringIO.new(''))
-    ws = Akaza::Ruby2ws::Transpiler.new(code).transpile
+    ws = Akaza::Ruby2ws.ruby_to_ws(code)
     out = StringIO.new
     Akaza.eval(ws, input: input, output: out)
     assert_equal expected_output, out.string
