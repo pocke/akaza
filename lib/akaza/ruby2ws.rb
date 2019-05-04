@@ -129,7 +129,7 @@ module Akaza
         @labels = {}
 
         @methods = []
-        @lvars_stack = [[]]
+        @lvars_stack = [[variable_name_to_addr(:self)]]
 
         @current_class = nil
       end
@@ -138,6 +138,11 @@ module Akaza
         ast = RubyVM::AbstractSyntaxTree.parse(@ruby_code)
         commands = []
         body = compile_expr(ast)
+
+        # Save self for top level
+        commands << [:stack, :push, variable_name_to_addr(:self)]
+        commands << [:stack, :push, NONE]
+        commands << [:heap, :save]
 
         # Reserve heaps for local variables
         commands << [:stack, :push, HEAP_COUNT_ADDR]
@@ -308,10 +313,16 @@ module Akaza
           # stack: [addr_of_the_target_item]
           commands << [:heap, :load]
         in [:DEFN, name, [:SCOPE, lvar_table, [:ARGS, args_count ,*_], body]]
+          self_addr = variable_name_to_addr(:self)
           m = [
             [:flow, :def, ident_to_label(name)],
+
+            # Restore self
+            [:stack, :push, self_addr],
+            [:stack, :swap],
+            [:heap, :save],
           ]
-          @lvars_stack << []
+          @lvars_stack << [self_addr]
           lvar_table[0...args_count].reverse.each do |args_name|
             addr = variable_name_to_addr(args_name)
             lvars << addr
@@ -338,7 +349,7 @@ module Akaza
           # It is available in class definition.
           commands << [:stack, :push, NIL]
         in [:SELF]
-          self_addr = ident_to_label(:self)
+          self_addr = variable_name_to_addr(:self)
           commands << [:stack, :push, self_addr]
           commands << [:heap, :load]
         in [:BLOCK, *children]
@@ -347,9 +358,17 @@ module Akaza
             commands << [:stack, :pop] unless index == children.size - 1
           end
         in [:VCALL, name]
-          commands.concat(compile_call(name, []))
+          self_commands = [
+            [:stack, :push, variable_name_to_addr(:self)],
+            [:heap, :load]
+          ]
+          commands.concat(compile_call(name, [], self_commands))
         in [:FCALL, name, [:ARRAY, *args, nil]]
-          commands.concat(compile_call(name, args))
+          self_commands = [
+            [:stack, :push, variable_name_to_addr(:self)],
+            [:heap, :load]
+          ]
+          commands.concat(compile_call(name, args, self_commands))
         in [:CALL, recv, :unshift, [:ARRAY, expr, nil]]
           commands.concat(compile_expr(recv))
           commands << [:stack, :dup]
@@ -373,6 +392,9 @@ module Akaza
           # stack: [array, unwrapped_addr_of_array, new_item_value_addr]
 
           commands << [:heap, :save]
+        in [:CALL, recv, name, [:ARRAY, *args, nil]]
+          self_commands = compile_expr(recv)
+          commands.concat compile_call(name, args, self_commands)
         in [:IF, cond, if_body, else_body]
           commands.concat(compile_if(cond, if_body, else_body))
         in [:UNLESS, cond, else_body, if_body]
@@ -600,17 +622,22 @@ module Akaza
       end
 
       # Compile fcall and vcall
-      private def compile_call(name, args)
+      private def compile_call(name, args, self_commands)
         commands = []
         with_storing_lvars(commands) do
+          # push args
           args.each do |arg|
             commands.concat(compile_expr(arg))
           end
+          # push self
+          commands.concat self_commands
+
           commands << [:flow, :call, ident_to_label(name)]
           commands << [:stack, :push, TMP_ADDR]
           commands << [:stack, :swap]
           commands << [:heap, :save]
         end
+        # restore return value
         commands << [:stack, :push, TMP_ADDR]
         commands << [:heap, :load]
         commands
