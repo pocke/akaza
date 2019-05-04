@@ -395,50 +395,10 @@ module Akaza
 
           commands << [:heap, :save]
         in [:CALL, recv, name, [:ARRAY, *args, nil]]
-          is_int_label = ident_to_label(nil)
-          is_array_label = ident_to_label(nil)
-          is_hash_label = ident_to_label(nil)
-          end_label = ident_to_label(nil)
-
-          commands.concat compile_expr(recv)
-          commands.concat SAVE_TMP_COMMANDS
-          # stack: [recv]
-
-          self_commands = LOAD_TMP_COMMANDS
-
-          # is_a?(Integer)
-          commands << [:stack, :push, TYPE_INT]
-          commands << [:flow, :call, is_a_label]
-          commands << [:flow, :jump_if_zero, is_int_label]
-
-          # is_a?(Array)
-          commands << [:stack, :push, TYPE_ARRAY]
-          commands.concat LOAD_TMP_COMMANDS
-          commands << [:flow, :call, is_a_label]
-          commands << [:flow, :jump_if_zero, is_array_label]
-
-          # is_a?(Hash)
-          commands << [:stack, :push, TYPE_HASH]
-          commands.concat LOAD_TMP_COMMANDS
-          commands << [:flow, :call, is_a_label]
-          commands << [:flow, :jump_if_zero, is_hash_label]
-
-          # Other
-          # TODO: raise error!
-          commands << [:flow, :exit]
-
-          commands << [:flow, :def, is_int_label]
-          commands.concat compile_call(:"Integer##{name}", args, self_commands)
-          commands << [:flow, :jump, end_label]
-
-          commands << [:flow, :def, is_array_label]
-          commands.concat compile_call(:"Array##{name}", args, self_commands)
-          commands << [:flow, :jump, end_label]
-
-          commands << [:flow, :def, is_hash_label]
-          commands.concat compile_call(:"Hash##{name}", args, self_commands)
-
-          commands << [:flow, :def, end_label]
+          commands.concat compile_call_with_recv(recv, name, args)
+        in [:CALL, recv, name, nil]
+          args = []
+          commands.concat compile_call_with_recv(recv, name, args)
         in [:IF, cond, if_body, else_body]
           commands.concat(compile_if(cond, if_body, else_body))
         in [:UNLESS, cond, else_body, if_body]
@@ -665,7 +625,7 @@ module Akaza
         end
       end
 
-      # Compile fcall and vcall
+      # Compile FCALL and VCALL
       private def compile_call(name, args, self_commands)
         commands = []
         with_storing_lvars(commands) do
@@ -684,6 +644,58 @@ module Akaza
         # restore return value
         commands << [:stack, :push, TMP_ADDR]
         commands << [:heap, :load]
+        commands
+      end
+
+      # Compile CALL
+      private def compile_call_with_recv(recv, name, args)
+        commands = []
+
+        is_int_label = ident_to_label(nil)
+        is_array_label = ident_to_label(nil)
+        is_hash_label = ident_to_label(nil)
+        end_label = ident_to_label(nil)
+
+        commands.concat compile_expr(recv)
+        commands.concat SAVE_TMP_COMMANDS
+        # stack: [recv]
+
+        self_commands = LOAD_TMP_COMMANDS
+
+        # is_a?(Integer)
+        commands << [:stack, :push, TYPE_INT]
+        commands << [:flow, :call, is_a_label]
+        commands << [:flow, :jump_if_zero, is_int_label]
+
+        # is_a?(Array)
+        commands << [:stack, :push, TYPE_ARRAY]
+        commands.concat LOAD_TMP_COMMANDS
+        commands << [:flow, :call, is_a_label]
+        commands << [:flow, :jump_if_zero, is_array_label]
+
+        # is_a?(Hash)
+        commands << [:stack, :push, TYPE_HASH]
+        commands.concat LOAD_TMP_COMMANDS
+        commands << [:flow, :call, is_a_label]
+        commands << [:flow, :jump_if_zero, is_hash_label]
+
+        # Other
+        # TODO: raise error!
+        commands << [:flow, :exit]
+
+        commands << [:flow, :def, is_int_label]
+        commands.concat compile_call(:"Integer##{name}", args, self_commands)
+        commands << [:flow, :jump, end_label]
+
+        commands << [:flow, :def, is_array_label]
+        commands.concat compile_call(:"Array##{name}", args, self_commands)
+        commands << [:flow, :jump, end_label]
+
+        commands << [:flow, :def, is_hash_label]
+        commands.concat compile_call(:"Hash##{name}", args, self_commands)
+
+        commands << [:flow, :def, end_label]
+
         commands
       end
 

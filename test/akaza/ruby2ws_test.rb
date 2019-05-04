@@ -89,9 +89,18 @@ class Ruby2wsTest < Minitest::Test
         end
       end
 
+      class Integer
+        def wrap_array
+          [self]
+        end
+      end
+
       x = []
       x.prepend(40)
       put_as_number x[0]
+
+      a = 42.wrap_array
+      put_as_number a[0]
     RUBY
   end
 
