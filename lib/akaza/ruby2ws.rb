@@ -664,6 +664,7 @@ module Akaza
 
         # is_a?(Integer)
         commands << [:stack, :push, TYPE_INT]
+        commands << [:stack, :swap]
         commands << [:flow, :call, is_a_label]
         commands << [:flow, :jump_if_zero, is_int_label]
 
@@ -681,6 +682,8 @@ module Akaza
 
         # Other
         # TODO: raise error!
+        commands << [:stack, :push, '!'.ord]
+        commands << [:io, :write_char]
         commands << [:flow, :exit]
 
         commands << [:flow, :def, is_int_label]

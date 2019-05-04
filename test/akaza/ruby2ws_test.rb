@@ -82,7 +82,7 @@ class Ruby2wsTest < Minitest::Test
   end
 
   def test_transpile_class
-    assert_eval "40", <<~RUBY
+    assert_eval "40,42", <<~RUBY
       class Array
         def prepend(x)
           self.unshift(x)
@@ -98,6 +98,8 @@ class Ruby2wsTest < Minitest::Test
       x = []
       x.prepend(40)
       put_as_number x[0]
+
+      put_as_char ','
 
       a = 42.wrap_array
       put_as_number a[0]
