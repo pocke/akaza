@@ -274,12 +274,14 @@ module Akaza
           m = [
             [:flow, :def, ident_to_label(name)],
           ]
+          @lvars_stack << []
           lvar_table[0...args_count].reverse.each do |args_name|
-            m << [:stack, :push, variable_name_to_addr(args_name)]
+            addr = variable_name_to_addr(args_name)
+            lvars << addr
+            m << [:stack, :push, addr]
             m << [:stack, :swap]
             m << [:heap, :save]
           end
-          @lvars_stack << []
           m.concat(compile_expr(body))
           @lvars_stack.pop
           m << [:flow, :end]

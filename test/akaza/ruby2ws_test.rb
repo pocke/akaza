@@ -264,6 +264,30 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_fibo
+    assert_eval "1,1,2,3,5,89", <<~RUBY
+      def fibo(n)
+        if n - 2 < 0
+          1
+        else
+          fibo(n - 1) + fibo(n - 2)
+        end
+      end
+
+      put_as_number fibo(0)
+      put_as_char ','
+      put_as_number fibo(1)
+      put_as_char ','
+      put_as_number fibo(2)
+      put_as_char ','
+      put_as_number fibo(3)
+      put_as_char ','
+      put_as_number fibo(4)
+      put_as_char ','
+      put_as_number fibo(10)
+    RUBY
+  end
+
   def test_transpile_array_shift
     assert_eval "123", <<~RUBY
       addr = [1, 2, 3]
