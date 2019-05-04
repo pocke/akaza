@@ -12,9 +12,9 @@ case ARGV
 in ['exec', path]
   Akaza.eval(File.read(path))
 in ['wsrb', path]
-  print Akaza::Ruby2ws.ruby_to_ws(File.read(path))
+  print Akaza::Ruby2ws.ruby_to_ws(File.read(path), path: path)
 in ['exec_wsrb', path]
-  ws = Akaza::Ruby2ws.ruby_to_ws(File.read(path))
+  ws = Akaza::Ruby2ws.ruby_to_ws(File.read(path), path: path)
   Akaza.eval(ws)
 else
   usage

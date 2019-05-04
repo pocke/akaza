@@ -114,13 +114,16 @@ module Akaza
 
     class ParseError < StandardError; end
 
-    def self.ruby_to_ws(ruby_code)
-      Transpiler.new(ruby_code).transpile
+    def self.ruby_to_ws(ruby_code, path: '(eval)')
+      Transpiler.new(ruby_code, path: path).transpile
     end
 
     class Transpiler
-      def initialize(ruby_code)
+      # @param ruby_code [String]
+      # @param path [String] For debug information
+      def initialize(ruby_code, path:)
         @ruby_code = ruby_code
+        @path = path
 
         @variable_addr_index = 2
         @variable_addrs = {}
@@ -681,10 +684,7 @@ module Akaza
         commands << [:flow, :jump_if_zero, is_hash_label]
 
         # Other
-        # TODO: raise error!
-        commands << [:stack, :push, '!'.ord]
-        commands << [:io, :write_char]
-        commands << [:flow, :exit]
+        commands.concat compile_raise("Unknown type of receiver", recv)
 
         commands << [:flow, :def, is_int_label]
         commands.concat compile_call(:"Integer##{name}", args, self_commands)
@@ -815,6 +815,22 @@ module Akaza
         in [:OPCALL, [:LIT, 0], :<, [:ARRAY, x, nil]]
           make_body.(x, :jump_if_neg)
         end
+
+        commands
+      end
+
+      private def compile_raise(str, node)
+        msg = +"#{@path}:"
+        msg << "#{node.first_lineno}:#{node.first_column}"
+        msg << ": #{str} (Error)\n"
+        commands = []
+
+        msg.bytes.each do |byte|
+          commands << [:stack, :push, byte]
+          commands << [:io, :write_char]
+        end
+
+        commands << [:flow, :exit]
 
         commands
       end
