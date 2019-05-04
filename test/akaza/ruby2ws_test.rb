@@ -132,7 +132,7 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
-  def test_transpile_class_fcall_2
+  def test_transpile_class_fcall_unshift
     assert_eval "40", <<~RUBY
       class Array
         def prepend(x)
@@ -146,8 +146,20 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
-  def test_transpile_class_braces
-    skip
+  def test_transpile_class_fcall_array_ref
+    assert_eval "y", <<~RUBY
+      class Array
+        def fetch(key)
+          self[key]
+        end
+      end
+
+      array = ['x', 'y', 'z']
+      put_as_char array.fetch(1)
+    RUBY
+  end
+
+  def test_transpile_class_fcall_hash_ref
     assert_eval "20", <<~RUBY
       class Hash
         def fetch(key)

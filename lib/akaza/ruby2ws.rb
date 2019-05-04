@@ -148,6 +148,8 @@ module Akaza
         commands = []
         # define built-in functions
         define_array_unshift
+        define_array_ref
+        define_hash_ref
 
         body = compile_expr(ast)
 
@@ -259,29 +261,6 @@ module Akaza
 
           commands << [:heap, :load]
           # stack: [first_item]
-        in [:CALL, recv, :[], [:ARRAY, index, nil]]
-          label_array = ident_to_label(nil)
-          label_end = ident_to_label(nil)
-
-          commands.concat(compile_expr(recv))
-          commands << [:stack, :dup]
-          commands << [:stack, :push, 2 ** TYPE_BITS]
-          commands << [:calc, :mod]
-          commands << [:stack, :push, TYPE_ARRAY]
-          commands << [:calc, :sub]
-          commands << [:flow, :jump_if_zero, label_array] # when array
-
-          # when hash
-          commands.concat(compile_expr(index))
-          commands << [:flow, :call, hash_index_access_label]
-          commands << [:flow, :jump, label_end]
-
-          # when array
-          commands << [:flow, :def, label_array]
-          commands.concat(compile_expr(index))
-          commands << [:flow, :call, array_index_access_label]
-
-          commands << [:flow, :def, label_end]
         in [:VCALL, :exit]
           commands << [:flow, :exit]
         in [:LASGN, var, arg]
@@ -848,103 +827,6 @@ module Akaza
         commands
       end
 
-      # Array#[]
-      # stack: [recv, index], they're wrapped.
-      private def array_index_access_label
-        @array_index_access_label ||= (
-          label = ident_to_label(nil)
-
-          commands = []
-          commands << [:flow, :def, label]
-
-          commands << [:stack, :swap]
-          commands.concat(UNWRAP_COMMANDS)
-          commands << [:heap, :load]
-          commands << [:stack, :swap]
-          commands.concat(UNWRAP_COMMANDS)
-          # stack: [addr_of_first_item, index]
-
-          commands.concat(times do
-            c = []
-            c << [:stack, :swap]
-            # stack: [index, addr_of_first_item]
-            c << [:stack, :push, 1]
-            c << [:calc, :add]
-            c << [:heap, :load]
-            # stack: [index, addr_of_next_item]
-            c << [:stack, :swap]
-            c
-          end)
-          commands << [:stack, :pop]
-          # stack: [addr_of_the_target_item]
-          commands << [:heap, :load]
-
-          commands << [:flow, :end]
-          @methods << commands
-          label
-        )
-      end
-
-      # Hash#[]
-      # stack: [recv, key], they're wrapped.
-      private def hash_index_access_label
-        @hash_index_access_label ||= (
-          label = ident_to_label(nil)
-          key_not_collision_label = ident_to_label(nil)
-          check_key_equivalent_label = ident_to_label(nil)
-
-          commands = []
-          commands << [:flow, :def, label]
-
-          commands << [:stack, :swap]
-          commands.concat(UNWRAP_COMMANDS)
-          commands << [:heap, :load]
-          commands << [:stack, :swap]
-          # stack: [addr_of_first_key, key (wrapped)]
-          commands.concat(SAVE_TMP_COMMANDS)
-
-          # calc hash
-          # stack: [addr_of_first_key, key (wrapped)]
-          commands.concat(UNWRAP_COMMANDS)
-          commands << [:stack, :push, HASH_SIZE]
-          commands << [:calc, :mod]
-          commands << [:stack, :push, 3]
-          commands << [:calc, :multi]
-          # stack: [addr_of_first_key, hash]
-
-          commands << [:calc, :add]
-          # stack: [addr_of_target_key]
-
-          # Check key equivalent
-          commands << [:flow, :def, check_key_equivalent_label]
-          commands << [:stack, :dup]
-          commands << [:heap, :load]
-          commands.concat(LOAD_TMP_COMMANDS)
-          # stack: [addr_of_target_key, target_key, key]
-          commands << [:calc, :sub]
-          commands << [:flow, :jump_if_zero, key_not_collision_label]
-          # stack: [addr_of_target_key]
-
-          # when collistion
-          commands << [:stack, :push, 2]
-          commands << [:calc, :add]
-          # stack: [addr_of_next_key_addr]
-          commands << [:heap, :load]
-          # stack: [next_key_addr]
-          commands << [:flow, :jump, check_key_equivalent_label]
-
-          commands << [:flow, :def, key_not_collision_label]
-          commands << [:stack, :push, 1]
-          commands << [:calc, :add]
-          # stack: [addr_of_target_value]
-          commands << [:heap, :load]
-
-          commands << [:flow, :end]
-          @methods << commands
-          label
-        )
-      end
-
       private def initialize_hash
         commands = []
         # Allocate for Hash
@@ -1289,7 +1171,95 @@ module Akaza
         # stack: [self]
         commands << [:flow, :end]
         @methods << commands
-        label
+      end
+
+      # Array#[]
+      # stack: [index, recv]
+      private def define_array_ref
+        label = ident_to_label(:'Array#[]')
+
+        commands = []
+        commands << [:flow, :def, label]
+
+        commands.concat(UNWRAP_COMMANDS)
+        commands << [:heap, :load]
+        commands << [:stack, :swap]
+        commands.concat(UNWRAP_COMMANDS)
+        # stack: [addr_of_first_item, index]
+
+        commands.concat(times do
+          c = []
+          c << [:stack, :swap]
+          # stack: [index, addr_of_first_item]
+          c << [:stack, :push, 1]
+          c << [:calc, :add]
+          c << [:heap, :load]
+          # stack: [index, addr_of_next_item]
+          c << [:stack, :swap]
+          c
+        end)
+        commands << [:stack, :pop]
+        # stack: [addr_of_the_target_item]
+        commands << [:heap, :load]
+
+        commands << [:flow, :end]
+        @methods << commands
+      end
+
+      # Hash#[]
+      # stack: [key, recv]
+      private def define_hash_ref
+        label = ident_to_label(:'Hash#[]')
+        key_not_collision_label = ident_to_label(nil)
+        check_key_equivalent_label = ident_to_label(nil)
+
+        commands = []
+        commands << [:flow, :def, label]
+
+        commands.concat(UNWRAP_COMMANDS)
+        commands << [:heap, :load]
+        commands << [:stack, :swap]
+        # stack: [addr_of_first_key, key (wrapped)]
+        commands.concat(SAVE_TMP_COMMANDS)
+
+        # calc hash
+        # stack: [addr_of_first_key, key (wrapped)]
+        commands.concat(UNWRAP_COMMANDS)
+        commands << [:stack, :push, HASH_SIZE]
+        commands << [:calc, :mod]
+        commands << [:stack, :push, 3]
+        commands << [:calc, :multi]
+        # stack: [addr_of_first_key, hash]
+
+        commands << [:calc, :add]
+        # stack: [addr_of_target_key]
+
+        # Check key equivalent
+        commands << [:flow, :def, check_key_equivalent_label]
+        commands << [:stack, :dup]
+        commands << [:heap, :load]
+        commands.concat(LOAD_TMP_COMMANDS)
+        # stack: [addr_of_target_key, target_key, key]
+        commands << [:calc, :sub]
+        commands << [:flow, :jump_if_zero, key_not_collision_label]
+        # stack: [addr_of_target_key]
+
+        # when collistion
+        commands << [:stack, :push, 2]
+        commands << [:calc, :add]
+        # stack: [addr_of_next_key_addr]
+        commands << [:heap, :load]
+        # stack: [next_key_addr]
+        commands << [:flow, :jump, check_key_equivalent_label]
+
+        commands << [:flow, :def, key_not_collision_label]
+        commands << [:stack, :push, 1]
+        commands << [:calc, :add]
+        # stack: [addr_of_target_value]
+        commands << [:heap, :load]
+
+        commands << [:flow, :end]
+        @methods << commands
       end
 
       private def check_char!(char)
@@ -1310,10 +1280,12 @@ module Akaza
         @label_index += 1
       end
 
+      # @param ident [Symbol | nil]
       private def ident_to_label(ident)
         if ident
+          ident = ident.to_sym
           @labels[ident] ||= next_label_index
-            # .tap {|index| p [ident, num_to_ws(index)]}
+           # .tap {|index| p [ident, num_to_ws(index)]}
         else
           next_label_index
         end
