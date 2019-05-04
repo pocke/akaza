@@ -148,6 +148,22 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_eqeq
+    assert_eval "ft", <<~RUBY
+      def check(x, y)
+        z = x == y
+        if z
+          put_as_char 't'
+        else
+          put_as_char 'f'
+        end
+      end
+
+      check 1, 2
+      check 5, 5
+    RUBY
+  end
+
   def test_transpile_read_char
     assert_eval "rab", <<~RUBY, StringIO.new("bar")
       x = get_as_char

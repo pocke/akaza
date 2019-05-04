@@ -174,14 +174,20 @@ module Akaza
           commands << [:heap, :load]
           commands.concat(WRAP_NUMBER_COMMANDS)
         in [:OPCALL, l, sym, [:ARRAY, r, nil]]
-          com = {'+': :add, '-': :sub, '*': :multi, '/': :div, '%': :mod}[sym]
-          raise ParserError, "Unknown symbol: #{sym}" unless com
-          commands.concat(compile_expr(l))
-          commands.concat(UNWRAP_COMMANDS)
-          commands.concat(compile_expr(r))
-          commands.concat(UNWRAP_COMMANDS)
-          commands << [:calc, com]
-          commands.concat(WRAP_NUMBER_COMMANDS)
+          if sym == :==
+            commands.concat compile_expr(l)
+            commands.concat compile_expr(r)
+            commands << [:flow, :call, op_eqeq_label]
+          else
+            com = {'+': :add, '-': :sub, '*': :multi, '/': :div, '%': :mod}[sym]
+            raise ParseError, "Unknown symbol: #{sym}" unless com
+            commands.concat(compile_expr(l))
+            commands.concat(UNWRAP_COMMANDS)
+            commands.concat(compile_expr(r))
+            commands.concat(UNWRAP_COMMANDS)
+            commands << [:calc, com]
+            commands.concat(WRAP_NUMBER_COMMANDS)
+          end
         in [:CALL, expr, :shift, nil]
           commands.concat(compile_expr(expr))
           commands.concat(UNWRAP_COMMANDS)
@@ -584,10 +590,11 @@ module Akaza
 
       private def compile_if(cond, if_body, else_body)
         commands = []
-        else_label = ident_to_label(nil)
-        end_label = ident_to_label(nil)
 
-        body = -> (x, sym) do
+        optimized_body = -> (x, sym) do
+          else_label = ident_to_label(nil)
+          end_label = ident_to_label(nil)
+
           commands.concat(compile_expr(x))
           commands.concat(UNWRAP_COMMANDS)
           commands << [:flow, sym, else_label]
@@ -608,13 +615,30 @@ module Akaza
 
         case cond
         in [:OPCALL, [:LIT, 0], :==, [:ARRAY, x, nil]]
-          body.(x, :jump_if_zero)
+          optimized_body.(x, :jump_if_zero)
         in [:OPCALL, x, :==, [:ARRAY, [:LIT, 0], nil]]
-          body.(x, :jump_if_zero)
+          optimized_body.(x, :jump_if_zero)
         in [:OPCALL, x, :<, [:ARRAY, [:LIT, 0], nil]]
-          body.(x, :jump_if_neg)
+          optimized_body.(x, :jump_if_neg)
         in [:OPCALL, [:LIT, 0], :<, [:ARRAY, x, nil]]
-          body.(x, :jump_if_neg)
+          optimized_body.(x, :jump_if_neg)
+        else
+          if_label = ident_to_label(nil)
+          end_label = ident_to_label(nil)
+
+          commands.concat compile_expr(cond)
+          commands << [:flow, :call, rtest_label]
+          commands << [:flow, :jump_if_zero, if_label]
+
+          # when false
+          commands.concat compile_expr(else_body)
+          commands << [:flow, :jump, end_label]
+
+          # when true
+          commands << [:flow, :def, if_label]
+          commands.concat compile_expr(if_body)
+
+          commands << [:flow, :def, end_label]
         end
 
         commands
@@ -772,8 +796,76 @@ module Akaza
         commands
       end
 
+      # stack: [left, right]
+      # return stack: [TRUE/FALSE]
+      private def op_eqeq_label
+        @op_eqeq_label ||= (
+          label = ident_to_label(nil)
+          label_if_zero = ident_to_label(nil)
+          label_end = ident_to_label(nil)
+
+          commands = []
+          commands << [:flow, :def, label]
+
+          commands << [:calc, :sub]
+          commands << [:flow, :jump_if_zero, label_if_zero]
+          commands << [:stack, :push, FALSE]
+          commands << [:flow, :jump, label_end]
+
+          commands << [:flow, :def, label_if_zero]
+          commands << [:stack, :push, TRUE]
+
+          commands << [:flow, :def, label_end]
+          commands << [:flow, :end]
+          @methods << commands
+          label
+        )
+      end
+
+      # stack: [target]
+      # return stack: [0/1] if true then 0, if false then 1.
+      private def rtest_label
+        @rtest_label ||= (
+          truthy = 0
+          falsy = 1
+
+          label = ident_to_label(nil)
+          when_nil_label = ident_to_label(nil)
+          when_false_label = ident_to_label(nil)
+          end_label = ident_to_label(nil)
+
+          commands = []
+          commands << [:flow, :def, label]
+
+          commands << [:stack, :dup]
+          commands << [:stack, :push, NIL]
+          commands << [:calc, :sub]
+          commands << [:flow, :jump_if_zero, when_nil_label]
+
+          commands << [:stack, :push, FALSE]
+          commands << [:calc, :sub]
+          commands << [:flow, :jump_if_zero, when_false_label]
+
+          # when truthy
+          commands << [:stack, :push, truthy]
+          commands << [:flow, :jump, end_label]
+
+          # when nil
+          commands << [:flow, :def, when_nil_label]
+          commands << [:stack, :pop]
+          # when false
+          commands << [:flow, :def, when_false_label]
+          commands << [:stack, :push, falsy]
+
+          commands << [:flow, :def, end_label]
+          commands << [:flow, :end]
+          @methods << commands
+          label
+        )
+      end
+
       private def check_char!(char)
-        raise ParserError, "String size must be 1, but it's #{char} (#{char.size})" if char.size != 1
+        raise ParseError, "String size must be 1, but it's #{char} (#{char.size})" if char.size != 1
       end
 
       private def num_to_ws(num)
