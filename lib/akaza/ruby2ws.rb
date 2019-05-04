@@ -319,6 +319,7 @@ module Akaza
             m << [:stack, :swap]
             m << [:heap, :save]
           end
+
           m.concat(compile_expr(body))
           @lvars_stack.pop
           m << [:flow, :end]
@@ -335,6 +336,11 @@ module Akaza
         in [:BEGIN, nil]
           # skip
           # It is available in class definition.
+          commands << [:stack, :push, NIL]
+        in [:SELF]
+          self_addr = ident_to_label(:self)
+          commands << [:stack, :push, self_addr]
+          commands << [:heap, :load]
         in [:BLOCK, *children]
           children.each.with_index do |child, index|
             commands.concat(compile_expr(child))

@@ -84,6 +84,9 @@ class Ruby2wsTest < Minitest::Test
   def test_transpile_class
     assert_eval "", <<~RUBY
       class Integer
+        def prepend(x)
+          self.unshift(x)
+        end
       end
     RUBY
   end
