@@ -114,6 +114,38 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_class_fcall_1
+    assert_eval "40", <<~RUBY
+      class Array
+        def prepend(x)
+          self.unshift(x)
+        end
+
+        def prepend2(x)
+          prepend(x)
+        end
+      end
+
+      x = []
+      x.prepend2(40)
+      put_as_number x[0]
+    RUBY
+  end
+
+  def test_transpile_class_braces
+    skip
+    assert_eval "20", <<~RUBY
+      class Hash
+        def fetch(key)
+          self[key]
+        end
+      end
+
+      hash = { 1 => 20, 3 => 40 }
+      put_as_number hash.fetch(1)
+    RUBY
+  end
+
   def test_transpile_class_error
     assert_eval "(eval):1:0: Unknown type of receiver (Error)\n", <<~RUBY
       nil.unknown_method

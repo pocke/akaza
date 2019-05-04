@@ -133,6 +133,11 @@ module Akaza
 
         # Array<Array<Command>>
         @methods = []
+        @method_table = {
+          Array: [:unshift, :shift, :[], :[]=],
+          Integer: [],
+          Hash: [:[], :[]=],
+        }
         @lvars_stack = [[variable_name_to_addr(:self)]]
 
         @current_class = nil
@@ -343,6 +348,8 @@ module Akaza
           m << [:flow, :end]
 
           @methods << m
+
+          @method_table[@current_class] << name if @current_class
           commands << [:stack, :push, NIL] # def foo... returns nil
         in [:CLASS, [:COLON2, nil, class_name], nil, scope]
           raise ParseError, "Class cannot be nested, but #{@current_class}::#{class_name} is nested." if @current_class
@@ -365,17 +372,13 @@ module Akaza
             commands << [:stack, :pop] unless index == children.size - 1
           end
         in [:VCALL, name]
-          self_commands = [
-            [:stack, :push, variable_name_to_addr(:self)],
-            [:heap, :load]
-          ]
-          commands.concat(compile_call(name, [], self_commands))
+          commands << [:stack, :push, variable_name_to_addr(:self)]
+          commands << [:heap, :load]
+          commands.concat compile_call_with_recv(name, [], error_target_node: node, explicit_self: true)
         in [:FCALL, name, [:ARRAY, *args, nil]]
-          self_commands = [
-            [:stack, :push, variable_name_to_addr(:self)],
-            [:heap, :load]
-          ]
-          commands.concat(compile_call(name, args, self_commands))
+          commands << [:stack, :push, variable_name_to_addr(:self)]
+          commands << [:heap, :load]
+          commands.concat compile_call_with_recv(name, args, error_target_node: node, explicit_self: true)
         in [:CALL, recv, :unshift, [:ARRAY, expr, nil]]
           commands.concat(compile_expr(recv))
           commands << [:stack, :dup]
@@ -400,10 +403,12 @@ module Akaza
 
           commands << [:heap, :save]
         in [:CALL, recv, name, [:ARRAY, *args, nil]]
-          commands.concat compile_call_with_recv(recv, name, args)
+          commands.concat compile_expr(recv)
+          commands.concat compile_call_with_recv(name, args, error_target_node: recv, explicit_self: true)
         in [:CALL, recv, name, nil]
           args = []
-          commands.concat compile_call_with_recv(recv, name, args)
+          commands.concat compile_expr(recv)
+          commands.concat compile_call_with_recv(name, args, error_target_node: recv, explicit_self: true)
         in [:IF, cond, if_body, else_body]
           commands.concat(compile_if(cond, if_body, else_body))
         in [:UNLESS, cond, else_body, if_body]
@@ -653,17 +658,17 @@ module Akaza
       end
 
       # Compile CALL
-      private def compile_call_with_recv(recv, name, args)
+      # stack: [recv]
+      private def compile_call_with_recv(name, args, error_target_node:, explicit_self:)
         commands = []
 
         is_int_label = ident_to_label(nil)
         is_array_label = ident_to_label(nil)
         is_hash_label = ident_to_label(nil)
+        is_none_label = ident_to_label(nil)
         end_label = ident_to_label(nil)
 
-        commands.concat compile_expr(recv)
         commands.concat SAVE_TMP_COMMANDS
-        # stack: [recv]
 
         self_commands = LOAD_TMP_COMMANDS
 
@@ -685,19 +690,45 @@ module Akaza
         commands << [:flow, :call, is_a_label]
         commands << [:flow, :jump_if_zero, is_hash_label]
 
+        # == NONE
+        commands.concat LOAD_TMP_COMMANDS
+        commands << [:stack, :push, NONE]
+        commands << [:calc, :sub]
+        commands << [:flow, :jump_if_zero, is_none_label]
+
         # Other
-        commands.concat compile_raise("Unknown type of receiver", recv)
+        commands.concat compile_raise("Unknown type of receiver", error_target_node)
+
+        top_level_p = -> (type) { !@method_table[type].include?(name) && !explicit_self }
+        push_none = [[:stack, :push, NONE]]
 
         commands << [:flow, :def, is_int_label]
-        commands.concat compile_call(:"Integer##{name}", args, self_commands)
+        if top_level_p.(:Integer)
+          commands.concat compile_call(name, args, push_none)
+        else
+          commands.concat compile_call(:"Integer##{name}", args, self_commands)
+        end
         commands << [:flow, :jump, end_label]
 
         commands << [:flow, :def, is_array_label]
-        commands.concat compile_call(:"Array##{name}", args, self_commands)
+        if top_level_p.(:Array)
+          commands.concat compile_call(name, args, push_none)
+        else
+          commands.concat compile_call(:"Array##{name}", args, self_commands)
+        end
         commands << [:flow, :jump, end_label]
 
         commands << [:flow, :def, is_hash_label]
-        commands.concat compile_call(:"Hash##{name}", args, self_commands)
+        if top_level_p.(:Hash)
+          commands.concat compile_call(name, args, push_none)
+        else
+          commands.concat compile_call(:"Hash##{name}", args, self_commands)
+        end
+        commands << [:flow, :jump, end_label]
+
+        # If receiver is NONE, it means method is called at the top level
+        commands << [:flow, :def, is_none_label]
+        commands.concat compile_call(name, args, [[:stack, :push, NONE]])
 
         commands << [:flow, :def, end_label]
 
@@ -1254,6 +1285,7 @@ module Akaza
       private def ident_to_label(ident)
         if ident
           @labels[ident] ||= next_label_index
+            # .tap {|index| p [ident, num_to_ws(index)]}
         else
           next_label_index
         end
