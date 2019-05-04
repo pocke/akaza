@@ -65,6 +65,18 @@ It only allows argument without default value. It also does not allow keyword ar
 Arguments number is not checked.
 
 
+### Extend existing classes
+
+You can define instance methods for existing classes, that are `Array`, `Hash` and `Integer`.
+
+```ruby
+class Hash
+  def fetch(key)
+    self[key]
+  end
+end
+```
+
 ### Literals
 
 You can use Integer and Character literal.
@@ -94,6 +106,7 @@ It support only a few methods.
 * `unshift`
 * `[]`
 * `[]=`
+* `first`
 
 ### Hash
 
@@ -148,8 +161,6 @@ end
 put_as_number 3 unless x < 0
 ```
 
-It only allows `something == 0` or `something < 0` as condition.
-
 
 ### while
 
@@ -163,8 +174,6 @@ while x < 0
 end
 ```
 
-It only allows `something == 0` or `something < 0` as condition.
-
 ### add, sub, multi, div, mod
 
 You can use operators, that are `+`, `-`, `*`, `/` and `%`.
@@ -176,3 +185,14 @@ put_as_number 1 * 2
 put_as_number 4 / 2
 put_as_number 10 % 3
 ```
+
+### exception
+
+You can use `raise` method to raise an exception.
+
+```ruby
+raise "This is error message"
+```
+
+Program will exit by `raise` method with error message.
+But the exit status is `0`.
