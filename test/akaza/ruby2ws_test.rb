@@ -665,6 +665,24 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_hash_attr_asgn_to_not_existing_key
+    assert_eval '32,55', <<~RUBY
+      x = {}
+
+      x[1] = 32
+      x[2] = 55
+      # x[12] = 100
+      # x[23] = -4
+      put_as_number x[1]
+      put_as_char ','
+      put_as_number x[2]
+      # put_as_char ','
+      # put_as_number x[12]
+      # put_as_char ','
+      # put_as_number x[23]
+    RUBY
+  end
+
   def test_transpile_prelude_array_first
     assert_eval '3', <<~RUBY
       x = [3, 2, 1]

@@ -1111,7 +1111,7 @@ module Akaza
       end
 
       # stack: [key, hash]
-      # return stack: [addr_fo_target_key]
+      # return stack: [addr_of_target_key]
       private def hash_key_to_addr_label
         @hash_key_to_addr_label ||= (
           label = ident_to_label(nil)
@@ -1147,6 +1147,14 @@ module Akaza
           # stack: [addr_of_target_key, target_key, key]
           commands << [:calc, :sub]
           commands << [:flow, :jump_if_zero, key_not_collision_label]
+          # stack: [addr_of_target_key]
+          # Check NONE
+          commands << [:stack, :dup]
+          commands << [:heap, :load]
+          commands << [:stack, :push, NONE]
+          commands << [:calc, :sub]
+          commands << [:flow, :jump_if_zero, key_not_collision_label]
+
           # stack: [addr_of_target_key]
 
           # when collistion
@@ -1342,6 +1350,8 @@ module Akaza
       # stack: [key, value, recv]
       private def define_hash_attr_asgn
         label = ident_to_label(:'Hash#[]=')
+        # when_not_allocated_label = ident_to_label(nil)
+        # when_allocated_label = ident_to_label(nil)
 
         commands = []
         commands << [:flow, :def, label]
@@ -1350,12 +1360,25 @@ module Akaza
         commands << [:stack, :pop]
         # stack: [key, value]
         commands << [:stack, :swap]
+        # commands << [:stack, :dup]
         commands.concat load_from_self_commands
-        # stack: [value, key, recv]
+        # stack: [value, key, key, recv]
 
         commands << [:flow, :call, hash_key_to_addr_label]
-        # stack: [value, addr_of_target_key]
+        # stack: [value, key, addr_of_target_key]
 
+        # # check NONE_ADDR
+        # commands << [:stack, :dup]
+        # commands << [:stack, :push, NONE_ADDR]
+        # commands << [:calc, :sub]
+        # commands << [:flow, :jump_if_zero, when_not_allocated_label]
+        # commands << [:flow, :jump, when_allocated_label]
+
+        # # When not allocated
+        # 
+
+        # # stack: [value, key, addr_of_target_key]
+        # commands << [:flow, :def, when_allocated_label]
         commands << [:stack, :push, 1]
         commands << [:calc, :add]
         # stack: [value, addr_of_target_value]
