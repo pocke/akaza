@@ -40,6 +40,7 @@ module Akaza
     TMP_ADDR = 1
     HEAP_COUNT_ADDR = 2
 
+    TYPES = %w[Integer Hash Array]
     TYPE_BITS = 2
 
     TYPE_SPECIAL = 0b00
@@ -129,6 +130,8 @@ module Akaza
 
         @methods = []
         @lvars_stack = [[]]
+
+        @current_class = nil
       end
 
       def transpile
@@ -322,8 +325,16 @@ module Akaza
 
           @methods << m
           commands << [:stack, :push, NIL] # def foo... returns nil
+        in [:CLASS, [:COLON2, nil, class_name], nil, scope]
+          raise ParseError, "Class cannot be nested, but #{@current_class}::#{class_name} is nested." if @current_class
+          @current_class = class_name
+          commands.concat compile_expr(scope)
+          @current_class = nil
         in [:SCOPE, _, _, body]
           commands.concat(compile_expr(body))
+        in [:BEGIN, nil]
+          # skip
+          # It is available in class definition.
         in [:BLOCK, *children]
           children.each.with_index do |child, index|
             commands.concat(compile_expr(child))
