@@ -311,11 +311,11 @@ module Akaza
         in [:VCALL, name]
           commands << [:stack, :push, variable_name_to_addr(:self)]
           commands << [:heap, :load]
-          commands.concat compile_call_with_recv(name, [], error_target_node: node, explicit_self: true)
+          commands.concat compile_call_with_recv(name, [], error_target_node: node, explicit_self: false)
         in [:FCALL, name, [:ARRAY, *args, nil]]
           commands << [:stack, :push, variable_name_to_addr(:self)]
           commands << [:heap, :load]
-          commands.concat compile_call_with_recv(name, args, error_target_node: node, explicit_self: true)
+          commands.concat compile_call_with_recv(name, args, error_target_node: node, explicit_self: false)
         in [:CALL, recv, name, [:ARRAY, *args, nil]]
           commands.concat compile_expr(recv)
           commands.concat compile_call_with_recv(name, args, error_target_node: recv, explicit_self: true)
