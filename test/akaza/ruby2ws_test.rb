@@ -164,6 +164,23 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_not
+    assert_eval 'ft', <<~RUBY
+      if !3
+        put_as_char 't'
+      else
+        put_as_char 'f'
+      end
+
+      x = 2
+      if !(x == 1)
+        put_as_char 't'
+      else
+        put_as_char 'f'
+      end
+    RUBY
+  end
+
   def test_transpile_read_char
     assert_eval "rab", <<~RUBY, StringIO.new("bar")
       x = get_as_char

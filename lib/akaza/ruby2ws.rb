@@ -173,21 +173,22 @@ module Akaza
           commands << [:stack, :push, TMP_ADDR]
           commands << [:heap, :load]
           commands.concat(WRAP_NUMBER_COMMANDS)
+        in [:OPCALL, l, :==, [:ARRAY, r, nil]]
+          commands.concat compile_expr(l)
+          commands.concat compile_expr(r)
+          commands << [:flow, :call, op_eqeq_label]
+        in [:OPCALL, recv, :!, nil]
+          commands.concat compile_expr(recv)
+          commands << [:flow, :call, op_not_label]
         in [:OPCALL, l, sym, [:ARRAY, r, nil]]
-          if sym == :==
-            commands.concat compile_expr(l)
-            commands.concat compile_expr(r)
-            commands << [:flow, :call, op_eqeq_label]
-          else
-            com = {'+': :add, '-': :sub, '*': :multi, '/': :div, '%': :mod}[sym]
-            raise ParseError, "Unknown symbol: #{sym}" unless com
-            commands.concat(compile_expr(l))
-            commands.concat(UNWRAP_COMMANDS)
-            commands.concat(compile_expr(r))
-            commands.concat(UNWRAP_COMMANDS)
-            commands << [:calc, com]
-            commands.concat(WRAP_NUMBER_COMMANDS)
-          end
+          com = {'+': :add, '-': :sub, '*': :multi, '/': :div, '%': :mod}[sym]
+          raise ParseError, "Unknown symbol: #{sym}" unless com
+          commands.concat(compile_expr(l))
+          commands.concat(UNWRAP_COMMANDS)
+          commands.concat(compile_expr(r))
+          commands.concat(UNWRAP_COMMANDS)
+          commands << [:calc, com]
+          commands.concat(WRAP_NUMBER_COMMANDS)
         in [:CALL, expr, :shift, nil]
           commands.concat(compile_expr(expr))
           commands.concat(UNWRAP_COMMANDS)
@@ -816,6 +817,35 @@ module Akaza
           commands << [:stack, :push, TRUE]
 
           commands << [:flow, :def, label_end]
+          commands << [:flow, :end]
+          @methods << commands
+          label
+        )
+      end
+
+      # stack: [obj]
+      # return stack: [TRUE/FALSE]
+      private def op_not_label
+        @op_not_label ||= (
+          label = ident_to_label(nil)
+          true_label = ident_to_label(nil)
+          end_label = ident_to_label(nil)
+
+          commands = []
+          commands << [:flow, :def, label]
+
+          commands << [:flow, :call, rtest_label]
+          commands << [:flow, :jump_if_zero, true_label]
+
+          # when obj is falsy
+          commands << [:stack, :push, TRUE]
+          commands << [:flow, :jump, end_label]
+
+          # when obj is truthy
+          commands << [:flow, :def, true_label]
+          commands << [:stack, :push, FALSE]
+
+          commands << [:flow, :def, end_label]
           commands << [:flow, :end]
           @methods << commands
           label
