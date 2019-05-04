@@ -181,6 +181,10 @@ module Akaza
           commands.concat compile_expr(l)
           commands.concat compile_expr(r)
           commands << [:flow, :call, op_spaceship_label]
+        in [:OPCALL, l, :<, [:ARRAY, r, nil]]
+          commands.concat compile_expr(l)
+          commands.concat compile_expr(r)
+          commands << [:flow, :call, op_lt_label]
         in [:OPCALL, l, :!=, [:ARRAY, r, nil]]
           commands.concat compile_expr(l)
           commands.concat compile_expr(r)
@@ -880,6 +884,33 @@ module Akaza
           commands << [:flow, :def, zero_label]
           commands << [:stack, :pop]
           commands << [:stack, :push, with_type(0, TYPE_INT)]
+
+          commands << [:flow, :def, end_label]
+          commands << [:flow, :end]
+          @methods << commands
+          label
+        )
+      end
+
+      # Object#<
+      # stack: [left, right]
+      # return stack: [TRUE/FALSE]
+      private def op_lt_label
+        @op_lt_label ||= (
+          label = ident_to_label(nil)
+          true_label = ident_to_label(nil)
+          end_label = ident_to_label(nil)
+          commands = []
+          commands << [:flow, :def, label]
+
+          commands << [:flow, :call, op_spaceship_label]
+          commands << [:flow, :jump_if_neg, true_label]
+
+          commands << [:stack, :push, FALSE]
+          commands << [:flow, :jump, end_label]
+
+          commands << [:flow, :def, true_label]
+          commands << [:stack, :push, TRUE]
 
           commands << [:flow, :def, end_label]
           commands << [:flow, :end]
