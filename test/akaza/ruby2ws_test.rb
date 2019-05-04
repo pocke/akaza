@@ -76,7 +76,7 @@ class Ruby2wsTest < Minitest::Test
   end
 
   def test_transpile_def_return_nil
-    assert_eval "0", <<~RUBY
+    assert_eval "4", <<~RUBY
       put_as_number(def foo() 1 end)
     RUBY
   end
@@ -123,8 +123,8 @@ class Ruby2wsTest < Minitest::Test
   end
 
   def test_transpile_if3
-    assert_eval "0", <<~RUBY
-      put_as_number((42 if 1 == 0)) # It returns nil, and nil is evaluated as 0.
+    assert_eval "4", <<~RUBY
+      put_as_number((42 if 1 == 0)) # It returns nil, and nil is evaluated as 4.
     RUBY
   end
 
@@ -145,6 +145,112 @@ class Ruby2wsTest < Minitest::Test
       else
         put_as_number 42
       end
+    RUBY
+  end
+
+  def test_transpile_eqeq
+    assert_eval "ft", <<~RUBY
+      def check(x, y)
+        z = x == y
+        if z
+          put_as_char 't'
+        else
+          put_as_char 'f'
+        end
+      end
+
+      check 1, 2
+      check 5, 5
+    RUBY
+  end
+
+  def test_transpile_spaceship
+    assert_eval "-1,0,1", <<~RUBY
+      put_as_number 1 <=> 10
+      put_as_char ','
+      put_as_number 42 <=> 42
+      put_as_char ','
+      put_as_number 42 <=> 3
+    RUBY
+  end
+
+  def test_transpile_lt
+    assert_eval "12", <<~RUBY
+      x = 42
+      put_as_number 1 if x < 52
+      put_as_number 999 if 52 < x
+      put_as_number 2 if -1 < 2
+    RUBY
+  end
+
+  def test_transpile_gt
+    assert_eval "12", <<~RUBY
+      x = 42
+      put_as_number 1 if x > 32
+      put_as_number 999 if 32 > x
+      put_as_number 2 if -2 > -5
+    RUBY
+  end
+
+  def test_transpile_lteq
+    assert_eval "123", <<~RUBY
+      x = 42
+      put_as_number 1 if x <= 52
+      put_as_number 999 if 52 <= x
+      put_as_number 2 if -10 <= -5
+      put_as_number 3 if 3 <= 3
+    RUBY
+  end
+
+  def test_transpile_gteq
+    assert_eval "123", <<~RUBY
+      x = 42
+      put_as_number 1 if 52 >= x
+      put_as_number 999 if x >= 52
+      put_as_number 2 if -10 >= -40
+      put_as_number 3 if 3 >= 3
+    RUBY
+  end
+
+  def test_transpile_not
+    assert_eval 'ft', <<~RUBY
+      if !3
+        put_as_char 't'
+      else
+        put_as_char 'f'
+      end
+
+      x = 2
+      if !(x == 1)
+        put_as_char 't'
+      else
+        put_as_char 'f'
+      end
+    RUBY
+  end
+
+  def test_transpile_noteq
+    assert_eval 'tf', <<~RUBY
+      x = 1
+      if x != 3
+        put_as_char 't'
+      else
+        put_as_char 'f'
+      end
+
+      if x != 1
+        put_as_char 't'
+      else
+        put_as_char 'f'
+      end
+    RUBY
+  end
+
+  def test_transpile_true_false_nil
+    assert_eval '123', <<~RUBY
+      put_as_number 1 if true
+      put_as_number 2 if !false
+      put_as_number 3 unless nil
     RUBY
   end
 

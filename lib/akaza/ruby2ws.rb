@@ -49,10 +49,12 @@ module Akaza
 
     HASH_SIZE = 11
 
-    # NIL is nil
-    NIL = 0 << TYPE_BITS + TYPE_SPECIAL
+    FALSE = 0 << TYPE_BITS + TYPE_SPECIAL
     # NONE is for internal. It does not available for user.
     NONE = 1 << TYPE_BITS + TYPE_SPECIAL
+    TRUE = 2 << TYPE_BITS + TYPE_SPECIAL
+    # NIL is nil
+    NIL = 4 << TYPE_BITS + TYPE_SPECIAL
 
     # Call when stack top is the target number.
     UNWRAP_COMMANDS = [
@@ -171,9 +173,41 @@ module Akaza
           commands << [:stack, :push, TMP_ADDR]
           commands << [:heap, :load]
           commands.concat(WRAP_NUMBER_COMMANDS)
+        in [:OPCALL, l, :==, [:ARRAY, r, nil]]
+          commands.concat compile_expr(l)
+          commands.concat compile_expr(r)
+          commands << [:flow, :call, op_eqeq_label]
+        in [:OPCALL, l, :<=>, [:ARRAY, r, nil]]
+          commands.concat compile_expr(l)
+          commands.concat compile_expr(r)
+          commands << [:flow, :call, op_spaceship_label]
+        in [:OPCALL, l, :<, [:ARRAY, r, nil]]
+          commands.concat compile_expr(l)
+          commands.concat compile_expr(r)
+          commands << [:flow, :call, op_lt_label]
+        in [:OPCALL, l, :>, [:ARRAY, r, nil]]
+          commands.concat compile_expr(l)
+          commands.concat compile_expr(r)
+          commands << [:flow, :call, op_gt_label]
+        in [:OPCALL, l, :<=, [:ARRAY, r, nil]]
+          commands.concat compile_expr(l)
+          commands.concat compile_expr(r)
+          commands << [:flow, :call, op_lteq_label]
+        in [:OPCALL, l, :>=, [:ARRAY, r, nil]]
+          commands.concat compile_expr(l)
+          commands.concat compile_expr(r)
+          commands << [:flow, :call, op_gteq_label]
+        in [:OPCALL, l, :!=, [:ARRAY, r, nil]]
+          commands.concat compile_expr(l)
+          commands.concat compile_expr(r)
+          commands << [:flow, :call, op_eqeq_label]
+          commands << [:flow, :call, op_not_label]
+        in [:OPCALL, recv, :!, nil]
+          commands.concat compile_expr(recv)
+          commands << [:flow, :call, op_not_label]
         in [:OPCALL, l, sym, [:ARRAY, r, nil]]
           com = {'+': :add, '-': :sub, '*': :multi, '/': :div, '%': :mod}[sym]
-          raise ParserError, "Unknown symbol: #{sym}" unless com
+          raise ParseError, "Unknown symbol: #{sym}" unless com
           commands.concat(compile_expr(l))
           commands.concat(UNWRAP_COMMANDS)
           commands.concat(compile_expr(r))
@@ -333,6 +367,12 @@ module Akaza
         in [:STR, str]
           check_char!(str)
           commands << [:stack, :push, with_type(str.ord, TYPE_INT)]
+        in [:TRUE]
+          commands << [:stack, :push, TRUE]
+        in [:FALSE]
+          commands << [:stack, :push, FALSE]
+        in [:NIL]
+          commands << [:stack, :push, NIL]
         in [:LVAR, name]
           commands << [:stack, :push, variable_name_to_addr(name)]
           commands << [:heap, :load]
@@ -582,10 +622,11 @@ module Akaza
 
       private def compile_if(cond, if_body, else_body)
         commands = []
-        else_label = ident_to_label(nil)
-        end_label = ident_to_label(nil)
 
-        body = -> (x, sym) do
+        optimized_body = -> (x, sym) do
+          else_label = ident_to_label(nil)
+          end_label = ident_to_label(nil)
+
           commands.concat(compile_expr(x))
           commands.concat(UNWRAP_COMMANDS)
           commands << [:flow, sym, else_label]
@@ -606,13 +647,38 @@ module Akaza
 
         case cond
         in [:OPCALL, [:LIT, 0], :==, [:ARRAY, x, nil]]
-          body.(x, :jump_if_zero)
+          optimized_body.(x, :jump_if_zero)
         in [:OPCALL, x, :==, [:ARRAY, [:LIT, 0], nil]]
-          body.(x, :jump_if_zero)
+          optimized_body.(x, :jump_if_zero)
         in [:OPCALL, x, :<, [:ARRAY, [:LIT, 0], nil]]
-          body.(x, :jump_if_neg)
+          optimized_body.(x, :jump_if_neg)
         in [:OPCALL, [:LIT, 0], :<, [:ARRAY, x, nil]]
-          body.(x, :jump_if_neg)
+          optimized_body.(x, :jump_if_neg)
+        else
+          if_label = ident_to_label(nil)
+          end_label = ident_to_label(nil)
+
+          commands.concat compile_expr(cond)
+          commands << [:flow, :call, rtest_label]
+          commands << [:flow, :jump_if_zero, if_label]
+
+          # when false
+          if else_body
+            commands.concat compile_expr(else_body)
+          else
+            commands << [:stack, :push, NIL]
+          end
+          commands << [:flow, :jump, end_label]
+
+          # when true
+          commands << [:flow, :def, if_label]
+          if if_body
+            commands.concat compile_expr(if_body)
+          else
+            commands << [:stack, :push, NIL]
+          end
+
+          commands << [:flow, :def, end_label]
         end
 
         commands
@@ -770,8 +836,263 @@ module Akaza
         commands
       end
 
+      # stack: [left, right]
+      # return stack: [TRUE/FALSE]
+      private def op_eqeq_label
+        @op_eqeq_label ||= (
+          label = ident_to_label(nil)
+          label_if_zero = ident_to_label(nil)
+          label_end = ident_to_label(nil)
+
+          commands = []
+          commands << [:flow, :def, label]
+
+          commands << [:calc, :sub]
+          commands << [:flow, :jump_if_zero, label_if_zero]
+          commands << [:stack, :push, FALSE]
+          commands << [:flow, :jump, label_end]
+
+          commands << [:flow, :def, label_if_zero]
+          commands << [:stack, :push, TRUE]
+
+          commands << [:flow, :def, label_end]
+          commands << [:flow, :end]
+          @methods << commands
+          label
+        )
+      end
+
+      # Object#<=>
+      # stack: [left, right]
+      # return stack: [-1/0/1]
+      #   if left < rigth  then -1
+      #   if left == rigth then 0
+      #   if left > rigth then 1
+      private def op_spaceship_label
+        @op_spaceship_label ||= (
+          label = ident_to_label(nil)
+          zero_label = ident_to_label(nil)
+          end_label = ident_to_label(nil)
+          neg_label = ident_to_label(nil)
+          commands = []
+          commands << [:flow, :def, label]
+
+          commands << [:calc, :sub]
+          commands << [:stack, :dup]
+          commands << [:flow, :jump_if_zero, zero_label]
+
+          commands << [:flow, :jump_if_neg, neg_label]
+
+          # if positive
+          commands << [:stack, :push, with_type(1, TYPE_INT)]
+          commands << [:flow, :jump, end_label]
+
+          # if negative
+          commands << [:flow, :def, neg_label]
+          commands << [:stack, :push, with_type(-1, TYPE_INT)]
+          commands << [:flow, :jump, end_label]
+
+          # if equal
+          commands << [:flow, :def, zero_label]
+          commands << [:stack, :pop]
+          commands << [:stack, :push, with_type(0, TYPE_INT)]
+
+          commands << [:flow, :def, end_label]
+          commands << [:flow, :end]
+          @methods << commands
+          label
+        )
+      end
+
+      # Object#<
+      # stack: [left, right]
+      # return stack: [TRUE/FALSE]
+      private def op_lt_label
+        @op_lt_label ||= (
+          label = ident_to_label(nil)
+          true_label = ident_to_label(nil)
+          end_label = ident_to_label(nil)
+          commands = []
+          commands << [:flow, :def, label]
+
+          commands << [:flow, :call, op_spaceship_label]
+          commands << [:flow, :jump_if_neg, true_label]
+
+          commands << [:stack, :push, FALSE]
+          commands << [:flow, :jump, end_label]
+
+          commands << [:flow, :def, true_label]
+          commands << [:stack, :push, TRUE]
+
+          commands << [:flow, :def, end_label]
+          commands << [:flow, :end]
+          @methods << commands
+          label
+        )
+      end
+
+      # Object#>
+      # stack: [left, right]
+      # return stack: [TRUE/FALSE]
+      private def op_gt_label
+        @op_gt_label ||= (
+          label = ident_to_label(nil)
+          false_label = ident_to_label(nil)
+          end_label = ident_to_label(nil)
+          commands = []
+          commands << [:flow, :def, label]
+
+          commands << [:flow, :call, op_spaceship_label]
+          commands << [:flow, :jump_if_neg, false_label]
+
+          commands << [:stack, :push, TRUE]
+          commands << [:flow, :jump, end_label]
+
+          commands << [:flow, :def, false_label]
+          commands << [:stack, :push, FALSE]
+
+          commands << [:flow, :def, end_label]
+          commands << [:flow, :end]
+          @methods << commands
+          label
+        )
+      end
+
+      # Object#<=
+      # stack: [left, right]
+      # return stack: [TRUE/FALSE]
+      private def op_lteq_label
+        @op_lteq_label ||= (
+          label = ident_to_label(nil)
+          true_label = ident_to_label(nil)
+          end_label = ident_to_label(nil)
+          commands = []
+          commands << [:flow, :def, label]
+
+          commands << [:flow, :call, op_spaceship_label]
+          commands.concat UNWRAP_COMMANDS
+          commands << [:stack, :push, 1]
+          commands << [:calc, :sub]
+          commands << [:flow, :jump_if_neg, true_label]
+
+          commands << [:stack, :push, FALSE]
+          commands << [:flow, :jump, end_label]
+
+          commands << [:flow, :def, true_label]
+          commands << [:stack, :push, TRUE]
+
+          commands << [:flow, :def, end_label]
+          commands << [:flow, :end]
+          @methods << commands
+          label
+        )
+      end
+
+      # Object#>=
+      # stack: [left, right]
+      # return stack: [TRUE/FALSE]
+      private def op_gteq_label
+        @op_gteq_label ||= (
+          label = ident_to_label(nil)
+          true_label = ident_to_label(nil)
+          end_label = ident_to_label(nil)
+          commands = []
+          commands << [:flow, :def, label]
+
+          commands << [:flow, :call, op_spaceship_label]
+          commands.concat UNWRAP_COMMANDS
+          commands << [:stack, :push, 1]
+          commands << [:calc, :add]
+          commands << [:stack, :push, -1]
+          commands << [:calc, :multi]
+          commands << [:flow, :jump_if_neg, true_label]
+
+          commands << [:stack, :push, FALSE]
+          commands << [:flow, :jump, end_label]
+
+          commands << [:flow, :def, true_label]
+          commands << [:stack, :push, TRUE]
+
+          commands << [:flow, :def, end_label]
+          commands << [:flow, :end]
+          @methods << commands
+          label
+        )
+      end
+
+      # stack: [obj]
+      # return stack: [TRUE/FALSE]
+      private def op_not_label
+        @op_not_label ||= (
+          label = ident_to_label(nil)
+          true_label = ident_to_label(nil)
+          end_label = ident_to_label(nil)
+
+          commands = []
+          commands << [:flow, :def, label]
+
+          commands << [:flow, :call, rtest_label]
+          commands << [:flow, :jump_if_zero, true_label]
+
+          # when obj is falsy
+          commands << [:stack, :push, TRUE]
+          commands << [:flow, :jump, end_label]
+
+          # when obj is truthy
+          commands << [:flow, :def, true_label]
+          commands << [:stack, :push, FALSE]
+
+          commands << [:flow, :def, end_label]
+          commands << [:flow, :end]
+          @methods << commands
+          label
+        )
+      end
+
+      # stack: [target]
+      # return stack: [0/1] if true then 0, if false then 1.
+      private def rtest_label
+        @rtest_label ||= (
+          truthy = 0
+          falsy = 1
+
+          label = ident_to_label(nil)
+          when_nil_label = ident_to_label(nil)
+          when_false_label = ident_to_label(nil)
+          end_label = ident_to_label(nil)
+
+          commands = []
+          commands << [:flow, :def, label]
+
+          commands << [:stack, :dup]
+          commands << [:stack, :push, NIL]
+          commands << [:calc, :sub]
+          commands << [:flow, :jump_if_zero, when_nil_label]
+
+          commands << [:stack, :push, FALSE]
+          commands << [:calc, :sub]
+          commands << [:flow, :jump_if_zero, when_false_label]
+
+          # when truthy
+          commands << [:stack, :push, truthy]
+          commands << [:flow, :jump, end_label]
+
+          # when nil
+          commands << [:flow, :def, when_nil_label]
+          commands << [:stack, :pop]
+          # when false
+          commands << [:flow, :def, when_false_label]
+          commands << [:stack, :push, falsy]
+
+          commands << [:flow, :def, end_label]
+          commands << [:flow, :end]
+          @methods << commands
+          label
+        )
+      end
+
       private def check_char!(char)
-        raise ParserError, "String size must be 1, but it's #{char} (#{char.size})" if char.size != 1
+        raise ParseError, "String size must be 1, but it's #{char} (#{char.size})" if char.size != 1
       end
 
       private def num_to_ws(num)
