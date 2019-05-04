@@ -177,6 +177,10 @@ module Akaza
           commands.concat compile_expr(l)
           commands.concat compile_expr(r)
           commands << [:flow, :call, op_eqeq_label]
+        in [:OPCALL, l, :<=>, [:ARRAY, r, nil]]
+          commands.concat compile_expr(l)
+          commands.concat compile_expr(r)
+          commands << [:flow, :call, op_spaceship_label]
         in [:OPCALL, l, :!=, [:ARRAY, r, nil]]
           commands.concat compile_expr(l)
           commands.concat compile_expr(r)
@@ -836,6 +840,48 @@ module Akaza
           commands << [:stack, :push, TRUE]
 
           commands << [:flow, :def, label_end]
+          commands << [:flow, :end]
+          @methods << commands
+          label
+        )
+      end
+
+      # Object#<=>
+      # stack: [left, right]
+      # return stack: [-1/0/1]
+      #   if left < rigth  then -1
+      #   if left == rigth then 0
+      #   if left > rigth then 1
+      private def op_spaceship_label
+        @op_spaceship_label ||= (
+          label = ident_to_label(nil)
+          zero_label = ident_to_label(nil)
+          end_label = ident_to_label(nil)
+          neg_label = ident_to_label(nil)
+          commands = []
+          commands << [:flow, :def, label]
+
+          commands << [:calc, :sub]
+          commands << [:stack, :dup]
+          commands << [:flow, :jump_if_zero, zero_label]
+
+          commands << [:flow, :jump_if_neg, neg_label]
+
+          # if positive
+          commands << [:stack, :push, with_type(1, TYPE_INT)]
+          commands << [:flow, :jump, end_label]
+
+          # if negative
+          commands << [:flow, :def, neg_label]
+          commands << [:stack, :push, with_type(-1, TYPE_INT)]
+          commands << [:flow, :jump, end_label]
+
+          # if equal
+          commands << [:flow, :def, zero_label]
+          commands << [:stack, :pop]
+          commands << [:stack, :push, with_type(0, TYPE_INT)]
+
+          commands << [:flow, :def, end_label]
           commands << [:flow, :end]
           @methods << commands
           label

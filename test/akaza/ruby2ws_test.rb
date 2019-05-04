@@ -164,6 +164,16 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_spaceship
+    assert_eval "-1,0,1", <<~RUBY
+      put_as_number 1 <=> 10
+      put_as_char ','
+      put_as_number 42 <=> 42
+      put_as_char ','
+      put_as_number 42 <=> 3
+    RUBY
+  end
+
   def test_transpile_not
     assert_eval 'ft', <<~RUBY
       if !3
