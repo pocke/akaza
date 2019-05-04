@@ -18,6 +18,14 @@ class Ruby2wsTest < Minitest::Test
     assert_eval "a", "put_as_char 'a'"
   end
 
+  def test_transpile_raise
+    assert_eval "x(eval):2:0: Foobar (Error)\n", <<~RUBY
+      put_as_char 'x'
+      raise "Foobar"
+      put_as_char 'y'
+    RUBY
+  end
+
   def test_transpile_def
     assert_eval "42", "def put_42() put_as_number(42) end; put_42"
   end

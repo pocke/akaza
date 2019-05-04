@@ -173,6 +173,8 @@ module Akaza
           commands.concat(UNWRAP_COMMANDS)
           commands << [:io, :write_char]
           commands << [:stack, :push, NIL]
+        in [:FCALL, :raise, [:ARRAY, [:STR, str], nil]]
+          commands.concat compile_raise(str, node)
         in [:VCALL, :get_as_number]
           commands << [:stack, :push, TMP_ADDR]
           commands << [:io, :read_num]
