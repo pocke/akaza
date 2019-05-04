@@ -613,6 +613,14 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_hash_ref_nil
+    assert_eval 'oo', <<~RUBY
+      x = { 1 => 42 }
+      put_as_char 'o' if x[2] == nil # not collision
+      put_as_char 'o' if x[12] == nil # collision
+    RUBY
+  end
+
   def test_transpile_hash_ref_with_collision
     assert_eval '42,4,10', <<~RUBY
       x = {

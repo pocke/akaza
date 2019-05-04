@@ -112,8 +112,6 @@ It support only a few methods.
 
 You can use Hash.
 
-Must not access to out of range of hash.
-
 ```ruby
 x = {
   1 => 2,
@@ -122,6 +120,7 @@ x = {
 
 x[5] = 6
 put_as_number x[1] # => 2
+x[100] # => nil
 ```
 
 It supports only a few methods.

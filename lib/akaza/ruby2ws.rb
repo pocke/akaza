@@ -1111,7 +1111,7 @@ module Akaza
       end
 
       # stack: [key, hash]
-      # return stack: [addr_of_target_key]
+      # return stack: [addr_of_prev_key, addr_of_target_key]
       private def hash_key_to_addr_label
         @hash_key_to_addr_label ||= (
           label = ident_to_label(nil)
@@ -1137,17 +1137,18 @@ module Akaza
           # stack: [addr_of_first_key, hash]
 
           commands << [:calc, :add]
-          # stack: [addr_of_target_key]
+          commands << [:stack, :dup]
+          # stack: [addr_of_prev_key, addr_of_target_key]
 
           # Check key equivalent
           commands << [:flow, :def, check_key_equivalent_label]
           commands << [:stack, :dup]
           commands << [:heap, :load]
           commands.concat(LOAD_TMP_COMMANDS)
-          # stack: [addr_of_target_key, target_key, key]
+          # stack: [addr_of_prev_key, addr_of_target_key, target_key, key]
           commands << [:calc, :sub]
           commands << [:flow, :jump_if_zero, key_not_collision_label]
-          # stack: [addr_of_target_key]
+          # stack: [addr_of_prev_key, addr_of_target_key]
           # Check NONE
           commands << [:stack, :dup]
           commands << [:heap, :load]
@@ -1155,14 +1156,23 @@ module Akaza
           commands << [:calc, :sub]
           commands << [:flow, :jump_if_zero, key_not_collision_label]
 
-          # stack: [addr_of_target_key]
+          # stack: [addr_of_prev_key, addr_of_target_key]
 
           # when collistion
+          # pop prev key
+          commands << [:stack, :swap]
+          commands << [:stack, :pop]
+          commands << [:stack, :dup]
+          # stack: [addr_of_target_key, addr_of_target_key]
           commands << [:stack, :push, 2]
           commands << [:calc, :add]
-          # stack: [addr_of_next_key_addr]
+          # stack: [addr_of_prev_key, addr_of_next_key_addr]
           commands << [:heap, :load]
-          # stack: [next_key_addr]
+          # stack: [addr_of_prev_key, next_key_addr]
+          commands << [:stack, :dup]
+          commands << [:stack, :push, NONE_ADDR]
+          commands << [:calc, :sub]
+          commands << [:flow, :jump_if_zero, key_not_collision_label]
           commands << [:flow, :jump, check_key_equivalent_label]
 
           commands << [:flow, :def, key_not_collision_label]
@@ -1330,18 +1340,45 @@ module Akaza
       # stack: [key, recv]
       private def define_hash_ref
         label = ident_to_label(:'Hash#[]')
+        when_not_found_label = ident_to_label(nil)
 
         commands = []
         commands << [:flow, :def, label]
 
         commands << [:flow, :call, hash_key_to_addr_label]
-        # stack: [addr_of_target_key]
+        # stack: [addr_of_prev_key, addr_of_target_key]
 
+        # pop addr_of_prev_key
+        commands << [:stack, :swap]
+        commands << [:stack, :pop]
+
+        # stack: [addr_of_target_key]
+        # check NONE_ADDR (chained)
+        commands << [:stack, :dup]
+        commands << [:stack, :push, NONE_ADDR]
+        commands << [:calc, :sub]
+        commands << [:flow, :jump_if_zero, when_not_found_label]
+
+        # check NONE (not chained)
+        commands << [:stack, :dup]
+        commands << [:heap, :load]
+        # stack: [addr_of_target_key, target_key]
+        commands << [:stack, :push, NONE]
+        commands << [:calc, :sub]
+        commands << [:flow, :jump_if_zero, when_not_found_label]
+
+        # when found
         commands << [:stack, :push, 1]
         commands << [:calc, :add]
         # stack: [addr_of_target_value]
         commands << [:heap, :load]
 
+        commands << [:flow, :end]
+
+        # when not found
+        commands << [:flow, :def, when_not_found_label]
+        commands << [:stack, :pop]
+        commands << [:stack, :push, NIL]
         commands << [:flow, :end]
         @methods << commands
       end
@@ -1360,12 +1397,14 @@ module Akaza
         commands << [:stack, :pop]
         # stack: [key, value]
         commands << [:stack, :swap]
-        # commands << [:stack, :dup]
+        commands << [:stack, :dup]
         commands.concat load_from_self_commands
         # stack: [value, key, key, recv]
 
         commands << [:flow, :call, hash_key_to_addr_label]
-        # stack: [value, key, addr_of_target_key]
+        # stack: [value, key, addr_of_prev_key, addr_of_target_key]
+        commands << [:stack, :swap] # remove me
+        commands << [:stack, :pop] # remove me
 
         # # check NONE_ADDR
         # commands << [:stack, :dup]
@@ -1379,6 +1418,11 @@ module Akaza
 
         # # stack: [value, key, addr_of_target_key]
         # commands << [:flow, :def, when_allocated_label]
+        commands.concat SAVE_TMP_COMMANDS
+        commands << [:stack, :swap]
+        commands << [:heap, :save]
+        commands.concat LOAD_TMP_COMMANDS
+        # stack: [value, addr_of_target_key]
         commands << [:stack, :push, 1]
         commands << [:calc, :add]
         # stack: [value, addr_of_target_value]
