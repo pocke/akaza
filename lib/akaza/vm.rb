@@ -54,7 +54,9 @@ module Akaza
           @heap[addr] = val
         in [:heap, :load]
           addr = @stack.pop
-          @stack.push @heap[addr]
+          val = @heap[addr]
+          raise "Heap #{addr} is not initialized" unless val
+          @stack.push val
         in [:flow, :def, label]
           # skip
         in [:flow, :call, label]

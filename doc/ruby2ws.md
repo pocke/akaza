@@ -110,9 +110,7 @@ It support only a few methods.
 
 ### Hash
 
-You can use Hash. It is implemented with Hash table and use chaining to resolve collision.
-
-Must not access to out of range of hash.
+You can use Hash.
 
 ```ruby
 x = {
@@ -122,6 +120,7 @@ x = {
 
 x[5] = 6
 put_as_number x[1] # => 2
+x[100] # => nil
 ```
 
 It supports only a few methods.
@@ -196,3 +195,41 @@ raise "This is error message"
 
 Program will exit by `raise` method with error message.
 But the exit status is `0`.
+
+
+Implementation
+---
+
+### Array
+
+A linked list.
+
+An Array object uses one heap.
+
+* address to the first item
+
+An item uses two heaps.
+
+* value
+* address to the next item
+
+Address to the next item will be `NONE_ADDR` if the item is the last.
+
+
+### Hash
+
+It is implemented with Hash table and use chaining to resolve collision.
+
+
+A Hash object uses one heap.
+
+* address to the first item
+
+An item uses three heaps.
+
+* key
+* value
+* address to the next chain
+
+On initialize, it reserve `HASH_SIZE * 3` heaps. And it sets `NONE` to all keys.
+Value and address is not initialized. Do not access these heaps before initializing.
