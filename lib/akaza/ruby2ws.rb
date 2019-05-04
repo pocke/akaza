@@ -323,9 +323,7 @@ module Akaza
           # It is available in class definition.
           commands << [:stack, :push, NIL]
         in [:SELF]
-          self_addr = variable_name_to_addr(:self)
-          commands << [:stack, :push, self_addr]
-          commands << [:heap, :load]
+          commands.concat load_from_self_commands
         in [:BLOCK, *children]
           children.each.with_index do |child, index|
             commands.concat(compile_expr(child))
@@ -1130,7 +1128,6 @@ module Akaza
       # stack: [recv]
       private def define_array_shift
         label = ident_to_label(:'Array#shift')
-        self_addr = variable_name_to_addr(:self)
         commands = []
         commands << [:flow, :def, label]
 
@@ -1163,21 +1160,18 @@ module Akaza
       # stack: [arg, recv]
       private def define_array_unshift
         label = ident_to_label(:'Array#unshift')
-        self_addr = variable_name_to_addr(:self)
         commands = []
         commands << [:flow, :def, label]
 
         # Restore self
-        commands << [:stack, :push, self_addr]
-        commands << [:stack, :swap]
-        commands << [:heap, :save]
+        commands.concat save_to_self_commands
+        commands << [:stack, :pop]
         # stack: [arg]
         commands.concat SAVE_TMP_COMMANDS
         commands << [:stack, :pop]
         # stack: []
 
-        commands << [:stack, :push, self_addr]
-        commands << [:heap, :load]
+        commands.concat load_from_self_commands
         commands.concat(UNWRAP_COMMANDS)
         # stack: [unwrapped_addr_of_array]
 
@@ -1199,8 +1193,7 @@ module Akaza
         # stack: [unwrapped_addr_of_array, new_item_value_addr]
         commands << [:heap, :save]
 
-        commands << [:stack, :push, self_addr]
-        commands << [:heap, :load]
+        commands.concat load_from_self_commands
         # stack: [self]
         commands << [:flow, :end]
         @methods << commands
