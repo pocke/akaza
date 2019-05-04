@@ -150,6 +150,7 @@ module Akaza
         define_array_shift
         define_array_unshift
         define_array_ref
+        define_array_attr_asgn
         define_hash_ref
 
         body = compile_expr(ast)
@@ -257,32 +258,10 @@ module Akaza
           commands << [:stack, :swap]
           commands << [:heap, :save]
         in [:ATTRASGN, recv, :[]=, [:ARRAY, index, value, nil]]
-          commands.concat(compile_expr(recv))
-          commands.concat(UNWRAP_COMMANDS)
-          commands << [:heap, :load]
-          commands.concat(compile_expr(index))
-          # stack: [addr_of_first_item, index]
-
-          commands.concat(UNWRAP_COMMANDS)
-          commands.concat(times do
-            c = []
-            c << [:stack, :swap]
-            # stack: [index, addr_of_first_item]
-            c << [:stack, :push, 1]
-            c << [:calc, :add]
-            c << [:heap, :load]
-            # stack: [index, addr_of_next_item]
-            c << [:stack, :swap]
-            c
-          end)
-          commands << [:stack, :pop] # pop index
-          commands << [:stack, :dup]
-          # stack: [addr_of_the_target_item, addr_of_the_target_item]
-
-          commands.concat(compile_expr(value))
-          commands << [:heap, :save]
-          # stack: [addr_of_the_target_item]
-          commands << [:heap, :load]
+          commands.concat compile_expr(recv)
+          commands.concat SAVE_TMP_COMMANDS
+          commands.pop
+          commands.concat compile_call_with_recv(:[]=, [index, value], error_target_node: node, explicit_self: true)
         in [:DEFN, name, [:SCOPE, lvar_table, [:ARGS, args_count ,*_], body]]
           self_addr = variable_name_to_addr(:self)
           label = @current_class ? ident_to_label(:"#{@current_class}##{name}") : ident_to_label(name)
@@ -1226,6 +1205,51 @@ module Akaza
         end)
         commands << [:stack, :pop]
         # stack: [addr_of_the_target_item]
+        commands << [:heap, :load]
+
+        commands << [:flow, :end]
+        @methods << commands
+      end
+
+      # Array#[]=
+      # stack: [index, value, recv]
+      private def define_array_attr_asgn
+        label = ident_to_label(:'Array#[]=')
+
+        commands = []
+        commands << [:flow, :def, label]
+
+        commands.concat save_to_self_commands
+        commands << [:stack, :pop]
+        commands << [:stack, :swap]
+        # stack: [value, index]
+
+        commands.concat load_from_self_commands
+        commands.concat(UNWRAP_COMMANDS)
+        commands << [:heap, :load]
+        commands << [:stack, :swap]
+        # stack: [value, addr_of_first_item, index]
+
+        commands.concat(UNWRAP_COMMANDS)
+        commands.concat(times do
+          c = []
+          c << [:stack, :swap]
+          # stack: [value, index, addr_of_first_item]
+          c << [:stack, :push, 1]
+          c << [:calc, :add]
+          c << [:heap, :load]
+          # stack: [value, index, addr_of_next_item]
+          c << [:stack, :swap]
+          c
+        end)
+        commands << [:stack, :pop] # pop index
+        commands.concat SAVE_TMP_COMMANDS
+        # stack: [value, addr_of_the_target_item]
+
+        commands << [:stack, :swap]
+        commands << [:heap, :save]
+        # stack: []
+        commands.concat LOAD_TMP_COMMANDS
         commands << [:heap, :load]
 
         commands << [:flow, :end]
