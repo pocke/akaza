@@ -75,6 +75,12 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_def_return_nil
+    assert_eval "0", <<~RUBY
+      put_as_number(def foo() 1 end)
+    RUBY
+  end
+
   def test_transpile_lvar_to_lvar
     assert_eval "42", <<~RUBY
       x = 42

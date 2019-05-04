@@ -285,6 +285,7 @@ module Akaza
           m << [:flow, :end]
 
           @methods << m
+          commands << [:stack, :push, NIL] # def foo... returns nil
         in [:SCOPE, _, _, body]
           commands.concat(compile_expr(body))
         in [:BLOCK, *children]
