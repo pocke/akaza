@@ -1137,7 +1137,8 @@ module Akaza
           # stack: [addr_of_first_key, hash]
 
           commands << [:calc, :add]
-          commands << [:stack, :dup]
+          commands << [:stack, :push, NONE_ADDR]
+          commands << [:stack, :swap]
           # stack: [addr_of_prev_key, addr_of_target_key]
 
           # Check key equivalent
@@ -1387,8 +1388,9 @@ module Akaza
       # stack: [key, value, recv]
       private def define_hash_attr_asgn
         label = ident_to_label(:'Hash#[]=')
-        # when_not_allocated_label = ident_to_label(nil)
-        # when_allocated_label = ident_to_label(nil)
+        when_not_allocated_label = ident_to_label(nil)
+        when_allocated_label = ident_to_label(nil)
+        after_allocated_label = ident_to_label(nil)
 
         commands = []
         commands << [:flow, :def, label]
@@ -1403,34 +1405,61 @@ module Akaza
 
         commands << [:flow, :call, hash_key_to_addr_label]
         # stack: [value, key, addr_of_prev_key, addr_of_target_key]
-        commands << [:stack, :swap] # remove me
-        commands << [:stack, :pop] # remove me
 
-        # # check NONE_ADDR
-        # commands << [:stack, :dup]
-        # commands << [:stack, :push, NONE_ADDR]
-        # commands << [:calc, :sub]
-        # commands << [:flow, :jump_if_zero, when_not_allocated_label]
-        # commands << [:flow, :jump, when_allocated_label]
+        # check NONE_ADDR
+        commands << [:stack, :dup]
+        commands << [:stack, :push, NONE_ADDR]
+        commands << [:calc, :sub]
+        commands << [:flow, :jump_if_zero, when_not_allocated_label]
+        commands << [:flow, :jump, when_allocated_label]
 
-        # # When not allocated
-        # 
-
-        # # stack: [value, key, addr_of_target_key]
-        # commands << [:flow, :def, when_allocated_label]
+        # When not allocated
+        commands << [:flow, :def, when_not_allocated_label]
+        # stack: [value, key, addr_of_prev_key, addr_of_target_key]
+        commands << [:stack, :pop]
+        commands << [:stack, :push, 2]
+        commands << [:calc, :add]
+        commands.concat ALLOCATE_NEW_HASH_ITEM_COMMANDS
+        # stack: [value, key, addr_of_prev_key, allocated_addr_of_target_key]
         commands.concat SAVE_TMP_COMMANDS
-        commands << [:stack, :swap]
         commands << [:heap, :save]
         commands.concat LOAD_TMP_COMMANDS
+        commands << [:flow, :jump, after_allocated_label]
+
+        # When allocated
+        commands << [:flow, :def, when_allocated_label]
+        # stack: [value, key, addr_of_prev_key, addr_of_target_key]
+        commands << [:stack, :swap]
+        commands << [:stack, :pop]
+
+        # stack: [value, key, addr_of_target_key]
+        commands << [:flow, :def, after_allocated_label]
+        # Save key
+        commands.concat SAVE_TMP_COMMANDS # addr_of_target_key
+        commands << [:stack, :swap]
+        commands << [:heap, :save]
+        # Save value
+        commands.concat LOAD_TMP_COMMANDS # addr_of_target_key
         # stack: [value, addr_of_target_key]
         commands << [:stack, :push, 1]
         commands << [:calc, :add]
         # stack: [value, addr_of_target_value]
+        commands.concat SAVE_TMP_COMMANDS # addr_of_target_value
         commands << [:stack, :swap]
-        commands.concat SAVE_TMP_COMMANDS
+        commands.concat LOAD_TMP_COMMANDS # addr_of_target_value
+        # stack: [addr_of_target_value, value, addr_of_target_value]
+        commands << [:stack, :swap]
+        commands.concat SAVE_TMP_COMMANDS # value
         commands << [:heap, :save]
-        commands.concat LOAD_TMP_COMMANDS
+        # stack: [addr_of_target_value]
+        # Save addr
+        commands << [:stack, :push, 1]
+        commands << [:calc, :add]
+        # stack: [addr_of_next_key_addr]
+        commands << [:stack, :push, NONE_ADDR]
+        commands << [:heap, :save]
 
+        commands.concat LOAD_TMP_COMMANDS # value
         commands << [:flow, :end]
         @methods << commands
       end

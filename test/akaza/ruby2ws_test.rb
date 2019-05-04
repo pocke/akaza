@@ -656,7 +656,7 @@ class Ruby2wsTest < Minitest::Test
       x = {
         1 => 42,   # 1 mod 11 = 1
         2 => 3,   # 2 mod 11 = 2
-        12 => 4,  # 12 mod 11 = 1
+        12 => 8,  # 12 mod 11 = 1
         23 => 10, # 23 mod 11 = 1
       }
       x[1] = 32
@@ -674,20 +674,20 @@ class Ruby2wsTest < Minitest::Test
   end
 
   def test_transpile_hash_attr_asgn_to_not_existing_key
-    assert_eval '32,55', <<~RUBY
+    assert_eval '32,55,100,-4', <<~RUBY
       x = {}
 
       x[1] = 32
       x[2] = 55
-      # x[12] = 100
-      # x[23] = -4
+      x[12] = 100
+      x[23] = -4
       put_as_number x[1]
       put_as_char ','
       put_as_number x[2]
-      # put_as_char ','
-      # put_as_number x[12]
-      # put_as_char ','
-      # put_as_number x[23]
+      put_as_char ','
+      put_as_number x[12]
+      put_as_char ','
+      put_as_number x[23]
     RUBY
   end
 
