@@ -177,6 +177,11 @@ module Akaza
           commands.concat compile_expr(l)
           commands.concat compile_expr(r)
           commands << [:flow, :call, op_eqeq_label]
+        in [:OPCALL, l, :!=, [:ARRAY, r, nil]]
+          commands.concat compile_expr(l)
+          commands.concat compile_expr(r)
+          commands << [:flow, :call, op_eqeq_label]
+          commands << [:flow, :call, op_not_label]
         in [:OPCALL, recv, :!, nil]
           commands.concat compile_expr(recv)
           commands << [:flow, :call, op_not_label]

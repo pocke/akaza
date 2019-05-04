@@ -181,6 +181,23 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_noteq
+    assert_eval 'tf', <<~RUBY
+      x = 1
+      if x != 3
+        put_as_char 't'
+      else
+        put_as_char 'f'
+      end
+
+      if x != 1
+        put_as_char 't'
+      else
+        put_as_char 'f'
+      end
+    RUBY
+  end
+
   def test_transpile_read_char
     assert_eval "rab", <<~RUBY, StringIO.new("bar")
       x = get_as_char
