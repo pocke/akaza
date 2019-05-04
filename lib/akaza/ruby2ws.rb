@@ -347,6 +347,12 @@ module Akaza
         in [:STR, str]
           check_char!(str)
           commands << [:stack, :push, with_type(str.ord, TYPE_INT)]
+        in [:TRUE]
+          commands << [:stack, :push, TRUE]
+        in [:FALSE]
+          commands << [:stack, :push, FALSE]
+        in [:NIL]
+          commands << [:stack, :push, NIL]
         in [:LVAR, name]
           commands << [:stack, :push, variable_name_to_addr(name)]
           commands << [:heap, :load]
@@ -637,12 +643,20 @@ module Akaza
           commands << [:flow, :jump_if_zero, if_label]
 
           # when false
-          commands.concat compile_expr(else_body)
+          if else_body
+            commands.concat compile_expr(else_body)
+          else
+            commands << [:stack, :push, NIL]
+          end
           commands << [:flow, :jump, end_label]
 
           # when true
           commands << [:flow, :def, if_label]
-          commands.concat compile_expr(if_body)
+          if if_body
+            commands.concat compile_expr(if_body)
+          else
+            commands << [:stack, :push, NIL]
+          end
 
           commands << [:flow, :def, end_label]
         end

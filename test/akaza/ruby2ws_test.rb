@@ -198,6 +198,14 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_true_false_nil
+    assert_eval '123', <<~RUBY
+      put_as_number 1 if true
+      put_as_number 2 if !false
+      put_as_number 3 unless nil
+    RUBY
+  end
+
   def test_transpile_read_char
     assert_eval "rab", <<~RUBY, StringIO.new("bar")
       x = get_as_char
