@@ -110,7 +110,9 @@ It support only a few methods.
 * `shift`
 * `unshift`
 * `[]`
+  * It does not support negative index. Use `array[array.size - 1]` instead of `array[-1]`. (Implementing pull request is welcome!)
 * `[]=`
+  * It works only with existing index. Use `Array#shift` to add a value to not initialized place.
 * `first`
 * `size`
 
