@@ -757,6 +757,15 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_prelude_array_empty_p
+    assert_eval '45', <<~RUBY
+      x = []
+      put_as_number 4 if x.empty?
+      y = [1]
+      put_as_number 5 unless y.empty?
+    RUBY
+  end
+
   def assert_eval(expected_output, code, input = StringIO.new(''))
     ws = Akaza::Ruby2ws.ruby_to_ws(code)
     out = StringIO.new
