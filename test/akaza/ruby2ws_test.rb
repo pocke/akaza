@@ -514,6 +514,16 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_array_shift_when_empty
+    assert_eval "12o", <<~RUBY
+      addr = [1, 2]
+      addr2 = addr
+      put_as_number addr.shift
+      put_as_number addr2.shift
+      put_as_char 'o' if addr.shift == nil
+    RUBY
+  end
+
   def test_transpile_array_shift_size
     assert_eval "221100", <<~RUBY
       arr = [1, 2, 3]
