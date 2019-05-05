@@ -483,7 +483,7 @@ class Ruby2wsTest < Minitest::Test
   def test_transpile_fibo
     assert_eval "1,1,2,3,5,89", <<~RUBY
       def fibo(n)
-        if n - 2 < 0
+        if n < 2
           1
         else
           fibo(n - 1) + fibo(n - 2)
