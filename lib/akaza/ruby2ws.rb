@@ -160,6 +160,7 @@ module Akaza
 
         # Prelude
         commands.concat compile_expr(PRELUDE_AST)
+        commands << [:stack, :pop] # the last evaluated value is remained.
 
         ast = RubyVM::AbstractSyntaxTree.parse(@ruby_code)
         body = compile_expr(ast)
@@ -1156,6 +1157,7 @@ module Akaza
         commands << [:stack, :push, 1]
         commands << [:calc, :add]
         commands << [:heap, :save]
+        # End increase size
 
         commands << [:stack, :dup]
         commands << [:heap, :load]
