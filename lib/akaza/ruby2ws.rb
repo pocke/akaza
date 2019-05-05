@@ -1056,6 +1056,18 @@ module Akaza
         commands.concat save_to_self_commands
 
         commands.concat(UNWRAP_COMMANDS)
+        # Reduce size
+        commands << [:stack, :dup]
+        commands << [:stack, :push, 1]
+        commands << [:calc, :add]
+        commands << [:stack, :dup]
+        commands << [:heap, :load]
+        # stack: [unwrapped_addr_of_array, addr_of_size, size]
+        commands << [:stack, :push, 1]
+        commands << [:calc, :sub]
+        commands << [:heap, :save]
+
+        # main
         commands << [:stack, :dup]
         commands << [:heap, :load]
         # stack: [unwrapped_addr_of_array, addr_of_first_item]
