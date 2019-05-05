@@ -80,6 +80,8 @@ end
 More examples: https://github.com/pocke/akaza/blob/master/lib/akaza/ruby2ws/prelude.rb
 That is built-in methods definitions with the extending class feature.
 
+Note: You cannot extend other classes, such as `TrueClass`.
+
 ### Literals
 
 You can use Integer and Character literal.
@@ -207,9 +209,10 @@ Implementation
 
 A linked list.
 
-An Array object uses one heap.
+An Array object uses two heap.
 
 * address to the first item
+* Array size
 
 An item uses two heaps.
 

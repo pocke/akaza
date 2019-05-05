@@ -341,11 +341,14 @@ module Akaza
           commands << [:stack, :dup]
           commands << [:stack, :dup]
           # stack: [array_addr, array_addr, array_addr]
-          commands << [:stack, :push, 1]
+          commands << [:stack, :push, 2]
           commands << [:calc, :add]
           # stack: [array_addr, array_addr, first_item_addr]
           commands << [:heap, :save]
           # stack: [array_addr]
+          commands.concat ALLOCATE_HEAP_COMMANDS
+          commands << [:stack, :push, with_type(items.size, TYPE_INT)]
+          commands << [:heap, :save]
 
           items.each.with_index do |item, index|
             # save value
@@ -367,9 +370,15 @@ module Akaza
 
           commands.concat WRAP_ARRAY_COMMANDS
         in [:ZARRAY]
+          # Allocate array ref
           commands.concat ALLOCATE_HEAP_COMMANDS
           commands << [:stack, :dup]
           commands << [:stack, :push, NONE_ADDR]
+          commands << [:heap, :save]
+          # stack: [array_addr]
+          # Allocate array size
+          commands.concat ALLOCATE_HEAP_COMMANDS
+          commands << [:stack, :push, with_type(0, TYPE_INT)]
           commands << [:heap, :save]
           commands.concat WRAP_ARRAY_COMMANDS
         in [:HASH, nil]
