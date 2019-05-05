@@ -112,6 +112,7 @@ It support only a few methods.
 * `[]`
 * `[]=`
 * `first`
+* `size`
 
 ### Hash
 

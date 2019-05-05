@@ -137,7 +137,7 @@ module Akaza
         # Array<Array<Command>>
         @methods = []
         @method_table = {
-          Array: [:unshift, :shift, :[], :[]=],
+          Array: [:size, :unshift, :shift, :[], :[]=],
           Integer: [],
           Hash: [:[], :[]=],
         }
