@@ -776,6 +776,73 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_if_retval
+    assert_eval "11,23,22,33", <<~RUBY
+      def check(x, y)
+        if x == 1
+          [11]
+        elsif x == 2
+          if y == 3
+            [23]
+          else
+            [22]
+          end
+        else
+          [33]
+        end
+      end
+
+      put_as_number check(1, -1)[0]
+      put_as_char ','
+      put_as_number check(2, 3)[0]
+      put_as_char ','
+      put_as_number check(2, 4)[0]
+      put_as_char ','
+      put_as_number check(3, 4)[0]
+    RUBY
+  end
+
+  def test_transpile_call_var
+    assert_eval "42", <<~RUBY
+      def foo
+        x = 1
+        bar
+        y = 1
+      end
+
+      def bar
+        put_as_number 42
+      end
+
+      foo
+    RUBY
+  end
+
+  def test_transpile_call_array_nested
+    assert_eval "3,3,1,42,6,2,3,5", <<~RUBY
+      a = [
+        [6, 2, 3],
+        42,
+        [5],
+      ]
+      put_as_number a.size
+      put_as_char ','
+      put_as_number a[0].size
+      put_as_char ','
+      put_as_number a[2].size
+      put_as_char ','
+      put_as_number a[1]
+      put_as_char ','
+      put_as_number a[0][0]
+      put_as_char ','
+      put_as_number a[0][1]
+      put_as_char ','
+      put_as_number a[0][2]
+      put_as_char ','
+      put_as_number a[2][0]
+    RUBY
+  end
+
   def assert_eval(expected_output, code, input = StringIO.new(''))
     ws = Akaza::Ruby2ws.ruby_to_ws(code)
     out = StringIO.new

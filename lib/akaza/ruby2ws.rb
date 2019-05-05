@@ -339,24 +339,39 @@ module Akaza
           commands << [:heap, :load]
         in [:ARRAY, *items, nil]
           commands.concat allocate_array_commands(items.size)
+          # stack: [array]
 
           items.each.with_index do |item, index|
-            # save value
+            # if index != 0
+            #   # load prev item's next addr
+            #   commands.concat SAVE_TMP_COMMANDS
+            #   commands << [:stack, :pop]
+            # end
+
+            # Allocate heap for value
             commands.concat ALLOCATE_HEAP_COMMANDS
+            # stack: [array, addr_of_value] if first
+            # stack: [array, prev_item_next_addr, addr_of_value] if not first
+
+            if index != 0
+              # Save prev item's next addr
+              commands.concat SAVE_TMP_COMMANDS
+              commands << [:heap, :save]
+              commands.concat LOAD_TMP_COMMANDS
+            end
+            # stack: [array, addr_of_value]
+
+            # Allocate heap for next addr
+            commands.concat ALLOCATE_HEAP_COMMANDS
+            # stack: [array, addr_of_value, addr_of_next_item]
+            commands << [:stack, :swap]
+
             commands.concat compile_expr(item)
             commands << [:heap, :save]
-
-            # save next address
-            commands.concat ALLOCATE_HEAP_COMMANDS
-            if index == items.size - 1
-              commands << [:stack, :push, NONE_ADDR]
-            else
-              commands << [:stack, :dup]
-              commands << [:stack, :push, 1]
-              commands << [:calc, :add]
-            end
-            commands << [:heap, :save]
           end
+          # stack: [array, last_item_next_addr]
+          commands << [:stack, :push, NONE_ADDR]
+          commands << [:heap, :save]
 
         in [:ZARRAY]
           # Allocate array ref
