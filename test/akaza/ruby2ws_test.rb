@@ -514,6 +514,65 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_array_shift_when_empty
+    assert_eval "12o", <<~RUBY
+      addr = [1, 2]
+      addr2 = addr
+      put_as_number addr.shift
+      put_as_number addr2.shift
+      put_as_char 'o' if addr.shift == nil
+    RUBY
+  end
+
+  def test_transpile_array_shift_size
+    assert_eval "221100", <<~RUBY
+      arr = [1, 2, 3]
+      arr2 = arr
+
+      arr.shift
+      put_as_number arr.size
+      put_as_number arr2.size
+      arr2.shift
+      put_as_number arr.size
+      put_as_number arr2.size
+      arr.shift
+      put_as_number arr.size
+      put_as_number arr2.size
+    RUBY
+  end
+
+  def test_transpile_array_unshift_size
+    assert_eval "112233", <<~RUBY
+      arr = []
+      arr2 = arr
+
+      arr.unshift 1
+      put_as_number arr.size
+      put_as_number arr2.size
+      arr2.unshift 5
+      put_as_number arr.size
+      put_as_number arr2.size
+      arr.unshift 30
+      put_as_number arr.size
+      put_as_number arr2.size
+    RUBY
+  end
+
+  def test_transpile_array_size
+    assert_eval '0,1,5', <<~RUBY
+      x = []
+      put_as_number x.size
+      put_as_char ','
+
+      y = [42]
+      put_as_number y.size
+      put_as_char ','
+
+      z = [2, 3, 5, 7, 11]
+      put_as_number z.size
+    RUBY
+  end
+
   def test_transpile_array_unshift
     assert_eval "123", <<~RUBY
       addr = [3]
@@ -695,6 +754,15 @@ class Ruby2wsTest < Minitest::Test
     assert_eval '3', <<~RUBY
       x = [3, 2, 1]
       put_as_number x.first
+    RUBY
+  end
+
+  def test_transpile_prelude_array_empty_p
+    assert_eval '45', <<~RUBY
+      x = []
+      put_as_number 4 if x.empty?
+      y = [1]
+      put_as_number 5 unless y.empty?
     RUBY
   end
 
