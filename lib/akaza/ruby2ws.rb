@@ -1121,6 +1121,17 @@ module Akaza
         commands.concat(UNWRAP_COMMANDS)
         # stack: [unwrapped_addr_of_array]
 
+        # Increase size
+        commands << [:stack, :dup]
+        commands << [:stack, :push, 1]
+        commands << [:calc, :add]
+        commands << [:stack, :dup]
+        commands << [:heap, :load]
+        # stack: [unwrapped_addr_of_array, addr_of_size, size]
+        commands << [:stack, :push, 1]
+        commands << [:calc, :add]
+        commands << [:heap, :save]
+
         commands << [:stack, :dup]
         commands << [:heap, :load]
         # stack: [unwrapped_addr_of_array, addr_of_first_item]

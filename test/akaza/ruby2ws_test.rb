@@ -531,6 +531,38 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_array_unshift_size
+    assert_eval "112233", <<~RUBY
+      arr = []
+      arr2 = arr
+
+      arr.unshift 1
+      put_as_number arr.size
+      put_as_number arr2.size
+      arr2.unshift 5
+      put_as_number arr.size
+      put_as_number arr2.size
+      arr.unshift 30
+      put_as_number arr.size
+      put_as_number arr2.size
+    RUBY
+  end
+
+  def test_transpile_array_size
+    assert_eval '0,1,5', <<~RUBY
+      x = []
+      put_as_number x.size
+      put_as_char ','
+
+      y = [42]
+      put_as_number y.size
+      put_as_char ','
+
+      z = [2, 3, 5, 7, 11]
+      put_as_number z.size
+    RUBY
+  end
+
   def test_transpile_array_unshift
     assert_eval "123", <<~RUBY
       addr = [3]
@@ -595,21 +627,6 @@ class Ruby2wsTest < Minitest::Test
       put_as_number x[0]
       put_as_number x[1]
       put_as_number x[2]
-    RUBY
-  end
-
-  def test_transpile_array_size
-    assert_eval '0,1,5', <<~RUBY
-      x = []
-      put_as_number x.size
-      put_as_char ','
-
-      y = [42]
-      put_as_number y.size
-      put_as_char ','
-
-      z = [2, 3, 5, 7, 11]
-      put_as_number z.size
     RUBY
   end
 
