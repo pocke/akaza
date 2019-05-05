@@ -141,7 +141,7 @@ module Akaza
           Integer: [],
           Hash: [:[], :[]=],
         }
-        @lvars_stack = [[variable_name_to_addr(:self)]]
+        @lvars_stack = []
 
         @current_class = nil
       end
@@ -240,7 +240,6 @@ module Akaza
           commands << [:stack, :push, var_addr]
           commands << [:stack, :swap]
           commands << [:heap, :save]
-          lvars << var_addr
         in [:CDECL, var, arg]
           commands.concat(compile_expr(arg))
           commands << [:stack, :dup]
@@ -259,10 +258,9 @@ module Akaza
             [:flow, :def, label],
           ]
           self_addr = variable_name_to_addr(:self)
-          @lvars_stack << [self_addr]
+          m.concat update_lvar_commands(lvar_table)
           lvar_table[0...args_count].reverse.each do |args_name|
             addr = variable_name_to_addr(args_name)
-            lvars << addr
             m << [:stack, :push, addr]
             m << [:stack, :swap]
             m << [:heap, :save]
@@ -281,8 +279,10 @@ module Akaza
           @current_class = class_name
           commands.concat compile_expr(scope)
           @current_class = nil
-        in [:SCOPE, _, _, body]
+        in [:SCOPE, lvar_table, _, body]
+          commands.concat update_lvar_commands(lvar_table)
           commands.concat(compile_expr(body))
+          @lvars_stack.pop
         in [:BEGIN, nil]
           # skip
           # It is available in class definition.
@@ -1476,6 +1476,22 @@ module Akaza
 
       private def lvars
         @lvars_stack.last
+      end
+
+      # OPTIMIZE: avoid save NIL for args
+      private def update_lvar_commands(table)
+        addr_table = table.map do |v|
+          variable_name_to_addr(v)
+        end
+        commands = []
+        addr_table.each do |addr|
+          commands << [:stack, :push, addr]
+          commands << [:stack, :push, NIL]
+          commands << [:heap, :save]
+        end
+        @lvars_stack << addr_table.dup
+        lvars << variable_name_to_addr(:self)
+        commands
       end
     end
   end

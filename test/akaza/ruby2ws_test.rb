@@ -62,6 +62,36 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_def_lvar3
+    # with uninitialized lvar
+    assert_eval "5", <<~RUBY
+      def foo
+        50
+      end
+
+      def bar
+        a = 3
+        if a == 3
+          foo
+          put_as_number 5
+        else
+          x = 6
+          put_as_number x
+        end
+      end
+
+      bar
+    RUBY
+  end
+
+  def test_transpile_lvar_if_false
+    # nil is 4
+    assert_eval "4", <<~RUBY
+      x = 100 if false
+      put_as_number x
+    RUBY
+  end
+
   def test_transpile_def_args
     assert_eval "42", <<~RUBY
       def foo(x, y)
