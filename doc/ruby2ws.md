@@ -77,6 +77,9 @@ class Hash
 end
 ```
 
+More examples: https://github.com/pocke/akaza/blob/master/lib/akaza/ruby2ws/prelude.rb
+That is built-in methods definitions with the extending class feature.
+
 ### Literals
 
 You can use Integer and Character literal.
