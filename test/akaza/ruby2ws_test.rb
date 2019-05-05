@@ -454,6 +454,29 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_while_retval
+    # while returns nil, and nil will be 4.
+    assert_eval "4,4,4", <<~RUBY
+      put_as_number(while false
+        100
+      end)
+      put_as_char ','
+
+      flag = true
+      put_as_number(while flag
+        flag = false
+        100
+      end)
+      put_as_char ','
+
+      n = 0
+      put_as_number(while n == 0
+        n = 1
+        100
+      end)
+    RUBY
+  end
+
   def test_transpile_fizzbuzz
     assert_eval "1 2 fizz 4 buzz fizz 7 8 fizz buzz 11 fizz 13 14 fizzbuzz ", <<~RUBY, StringIO.new("15\n")
       def fizz

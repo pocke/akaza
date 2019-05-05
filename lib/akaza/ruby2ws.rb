@@ -746,8 +746,10 @@ module Akaza
           commands << [:flow, :jump, end_label]
           commands << [:flow, :def, body_label]
           commands.concat(compile_expr(body))
+          commands << [:stack, :pop]
           commands << [:flow, :jump, cond_label]
           commands << [:flow, :def, end_label]
+          commands << [:stack, :push, NIL]
         end
 
         case cond
@@ -767,8 +769,10 @@ module Akaza
           commands << [:flow, :jump, end_label]
           commands << [:flow, :def, body_label]
           commands.concat(compile_expr(body))
+          commands << [:stack, :pop]
           commands << [:flow, :jump, cond_label]
           commands << [:flow, :def, end_label]
+          commands << [:stack, :push, NIL]
         end
 
         commands
@@ -1451,10 +1455,10 @@ module Akaza
         if ident
           ident = ident.to_sym
           @labels[ident] ||= next_label_index
-            # .tap {|index| p [ident, num_to_ws(index).chop]}
+             # .tap {|index| p [ident, num_to_ws(index).chop]}
         else
           next_label_index
-            # .tap { |index| p [caller[2], num_to_ws(index).chop] }
+             # .tap { |index| p [caller[2], num_to_ws(index).chop] }
         end
       end
 
