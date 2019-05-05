@@ -160,7 +160,6 @@ module Akaza
 
         # Prelude
         commands.concat compile_expr(PRELUDE_AST)
-        commands << [:stack, :pop] # the last evaluated value is remained.
 
         ast = RubyVM::AbstractSyntaxTree.parse(@ruby_code)
         body = compile_expr(ast)
@@ -255,16 +254,11 @@ module Akaza
           commands.pop
           commands.concat compile_call_with_recv(:[]=, [index, value], error_target_node: node, explicit_self: true)
         in [:DEFN, name, [:SCOPE, lvar_table, [:ARGS, args_count ,*_], body]]
-          self_addr = variable_name_to_addr(:self)
           label = @current_class ? ident_to_label(:"#{@current_class}##{name}") : ident_to_label(name)
           m = [
             [:flow, :def, label],
-
-            # Restore self
-            [:stack, :push, self_addr],
-            [:stack, :swap],
-            [:heap, :save],
           ]
+          self_addr = variable_name_to_addr(:self)
           @lvars_stack << [self_addr]
           lvar_table[0...args_count].reverse.each do |args_name|
             addr = variable_name_to_addr(args_name)
@@ -544,16 +538,21 @@ module Akaza
         end
       end
 
-      # Compile FCALL and VCALL
-      private def compile_call(name, args, self_commands)
+      # stack: [recv]
+      private def compile_call(name, args)
         commands = []
+        commands.concat SAVE_TMP_COMMANDS
+        commands << [:stack, :pop]
         with_storing_lvars(commands) do
+          # save self
+          commands.concat LOAD_TMP_COMMANDS
+          commands.concat save_to_self_commands
+          commands << [:stack, :pop]
+
           # push args
           args.each do |arg|
             commands.concat(compile_expr(arg))
           end
-          # push self
-          commands.concat self_commands
 
           commands << [:flow, :call, ident_to_label(name)]
           commands << [:stack, :push, TMP_ADDR]
@@ -578,8 +577,6 @@ module Akaza
         end_label = ident_to_label(nil)
 
         commands.concat SAVE_TMP_COMMANDS
-
-        self_commands = LOAD_TMP_COMMANDS
 
         # is_a?(Integer)
         commands << [:stack, :push, TYPE_INT]
@@ -609,35 +606,41 @@ module Akaza
         commands.concat compile_raise("Unknown type of receiver", error_target_node)
 
         top_level_p = -> (type) { !@method_table[type].include?(name) && !explicit_self }
-        push_none = [[:stack, :push, NONE]]
 
         commands << [:flow, :def, is_int_label]
         if top_level_p.(:Integer)
-          commands.concat compile_call(name, args, push_none)
+          commands << [:stack, :push, NONE]
+          commands.concat compile_call(name, args)
         else
-          commands.concat compile_call(:"Integer##{name}", args, self_commands)
+          commands.concat LOAD_TMP_COMMANDS
+          commands.concat compile_call(:"Integer##{name}", args)
         end
         commands << [:flow, :jump, end_label]
 
         commands << [:flow, :def, is_array_label]
         if top_level_p.(:Array)
-          commands.concat compile_call(name, args, push_none)
+          commands << [:stack, :push, NONE]
+          commands.concat compile_call(name, args)
         else
-          commands.concat compile_call(:"Array##{name}", args, self_commands)
+          commands.concat LOAD_TMP_COMMANDS
+          commands.concat compile_call(:"Array##{name}", args)
         end
         commands << [:flow, :jump, end_label]
 
         commands << [:flow, :def, is_hash_label]
         if top_level_p.(:Hash)
-          commands.concat compile_call(name, args, push_none)
+          commands << [:stack, :push, NONE]
+          commands.concat compile_call(name, args)
         else
-          commands.concat compile_call(:"Hash##{name}", args, self_commands)
+          commands.concat LOAD_TMP_COMMANDS
+          commands.concat compile_call(:"Hash##{name}", args)
         end
         commands << [:flow, :jump, end_label]
 
         # If receiver is NONE, it means method is called at the top level
         commands << [:flow, :def, is_none_label]
-        commands.concat compile_call(name, args, [[:stack, :push, NONE]])
+        commands << [:stack, :push, NONE]
+        commands.concat compile_call(name, args)
 
         commands << [:flow, :def, end_label]
 
@@ -1054,13 +1057,14 @@ module Akaza
       end
 
       # Array#size
-      # stack: [recv]
+      # stack: []
       # return stack: [int]
       private def define_array_size
         label = ident_to_label(:'Array#size')
         commands = []
         commands << [:flow, :def, label]
 
+        commands.concat load_from_self_commands
         commands.concat UNWRAP_COMMANDS
         commands << [:stack, :push, 1]
         commands << [:calc, :add]
@@ -1073,14 +1077,14 @@ module Akaza
       end
 
       # Array#shift
-      # stack: [recv]
+      # stack: []
       private def define_array_shift
         label = ident_to_label(:'Array#shift')
         when_empty_label = ident_to_label(nil)
         commands = []
         commands << [:flow, :def, label]
 
-        commands.concat save_to_self_commands
+        commands.concat load_from_self_commands
 
         commands.concat(UNWRAP_COMMANDS)
         # Reduce size
@@ -1129,20 +1133,15 @@ module Akaza
       end
 
       # Array#unshift
-      # stack: [arg, recv]
+      # stack: [arg]
       private def define_array_unshift
         label = ident_to_label(:'Array#unshift')
         commands = []
         commands << [:flow, :def, label]
 
-        # Restore self
-        commands.concat save_to_self_commands
-        commands << [:stack, :pop]
-        # stack: [arg]
         commands.concat SAVE_TMP_COMMANDS
         commands << [:stack, :pop]
         # stack: []
-
         commands.concat load_from_self_commands
         commands.concat(UNWRAP_COMMANDS)
         # stack: [unwrapped_addr_of_array]
@@ -1184,13 +1183,15 @@ module Akaza
       end
 
       # Array#[]
-      # stack: [index, recv]
+      # stack: [index]
       private def define_array_ref
         label = ident_to_label(:'Array#[]')
 
         commands = []
         commands << [:flow, :def, label]
 
+        commands.concat load_from_self_commands
+        # stack: [index, recv]
         commands.concat(UNWRAP_COMMANDS)
         commands << [:heap, :load]
         commands << [:stack, :swap]
@@ -1219,13 +1220,12 @@ module Akaza
       # Array#[]=
       # stack: [index, value, recv]
       private def define_array_attr_asgn
+      # stack: [index, value]
         label = ident_to_label(:'Array#[]=')
 
         commands = []
         commands << [:flow, :def, label]
 
-        commands.concat save_to_self_commands
-        commands << [:stack, :pop]
         commands << [:stack, :swap]
         # stack: [value, index]
 
@@ -1262,7 +1262,7 @@ module Akaza
       end
 
       # Hash#[]
-      # stack: [key, recv]
+      # stack: [key]
       private def define_hash_ref
         label = ident_to_label(:'Hash#[]')
         when_not_found_label = ident_to_label(nil)
@@ -1270,6 +1270,7 @@ module Akaza
         commands = []
         commands << [:flow, :def, label]
 
+        commands.concat load_from_self_commands
         commands << [:flow, :call, hash_key_to_addr_label]
         # stack: [addr_of_prev_key, addr_of_target_key]
 
@@ -1309,7 +1310,7 @@ module Akaza
       end
 
       # Hash#[]
-      # stack: [key, value, recv]
+      # stack: [key, value]
       private def define_hash_attr_asgn
         label = ident_to_label(:'Hash#[]=')
         when_not_allocated_label = ident_to_label(nil)
@@ -1319,8 +1320,6 @@ module Akaza
         commands = []
         commands << [:flow, :def, label]
 
-        commands.concat save_to_self_commands
-        commands << [:stack, :pop]
         # stack: [key, value]
         commands << [:stack, :swap]
         commands << [:stack, :dup]
@@ -1389,7 +1388,7 @@ module Akaza
       end
 
       # Integer#<=>
-      # stack: [right, left]
+      # stack: [right]
       # return stack: [-1/0/1]
       #   if left < rigth  then -1
       #   if left == rigth then 0
@@ -1402,6 +1401,7 @@ module Akaza
         commands = []
         commands << [:flow, :def, label]
 
+        commands.concat load_from_self_commands
         commands << [:calc, :sub]
         commands << [:stack, :dup]
         commands << [:flow, :jump_if_zero, zero_label]
@@ -1451,9 +1451,10 @@ module Akaza
         if ident
           ident = ident.to_sym
           @labels[ident] ||= next_label_index
-           # .tap {|index| p [ident, num_to_ws(index)]}
+            # .tap {|index| p [ident, num_to_ws(index).chop]}
         else
           next_label_index
+            # .tap { |index| p [caller[2], num_to_ws(index).chop] }
         end
       end
 
