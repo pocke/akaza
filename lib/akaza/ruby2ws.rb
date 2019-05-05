@@ -1050,6 +1050,7 @@ module Akaza
       # stack: [recv]
       private def define_array_shift
         label = ident_to_label(:'Array#shift')
+        when_empty_label = ident_to_label(nil)
         commands = []
         commands << [:flow, :def, label]
 
@@ -1063,6 +1064,8 @@ module Akaza
         commands << [:stack, :dup]
         commands << [:heap, :load]
         # stack: [unwrapped_addr_of_array, addr_of_size, size]
+        commands << [:stack, :dup]
+        commands << [:flow, :jump_if_zero, when_empty_label]
         commands << [:stack, :push, 1]
         commands << [:calc, :sub]
         commands << [:heap, :save]
@@ -1087,6 +1090,15 @@ module Akaza
         commands << [:heap, :load]
         commands << [:flow, :end]
         # stack: [first_item]
+
+        commands << [:flow, :def, when_empty_label]
+        # stack: [unwrapped_addr_of_array, addr_of_size, size]
+        commands << [:stack, :pop]
+        commands << [:stack, :pop]
+        commands << [:stack, :pop]
+        commands << [:stack, :push, NIL]
+        commands << [:flow, :end]
+
         @methods << commands
       end
 
