@@ -155,6 +155,7 @@ module Akaza
         define_array_attr_asgn
         define_hash_ref
         define_hash_attr_asgn
+        define_op_spaceship
 
         # Prelude
         commands.concat compile_expr(PRELUDE_AST)
@@ -210,26 +211,6 @@ module Akaza
           commands.concat compile_expr(l)
           commands.concat compile_expr(r)
           commands << [:flow, :call, op_eqeq_label]
-        in [:OPCALL, l, :<=>, [:ARRAY, r, nil]]
-          commands.concat compile_expr(l)
-          commands.concat compile_expr(r)
-          commands << [:flow, :call, op_spaceship_label]
-        in [:OPCALL, l, :<, [:ARRAY, r, nil]]
-          commands.concat compile_expr(l)
-          commands.concat compile_expr(r)
-          commands << [:flow, :call, op_lt_label]
-        in [:OPCALL, l, :>, [:ARRAY, r, nil]]
-          commands.concat compile_expr(l)
-          commands.concat compile_expr(r)
-          commands << [:flow, :call, op_gt_label]
-        in [:OPCALL, l, :<=, [:ARRAY, r, nil]]
-          commands.concat compile_expr(l)
-          commands.concat compile_expr(r)
-          commands << [:flow, :call, op_lteq_label]
-        in [:OPCALL, l, :>=, [:ARRAY, r, nil]]
-          commands.concat compile_expr(l)
-          commands.concat compile_expr(r)
-          commands << [:flow, :call, op_gteq_label]
         in [:OPCALL, l, :!=, [:ARRAY, r, nil]]
           commands.concat compile_expr(l)
           commands.concat compile_expr(r)
@@ -238,15 +219,17 @@ module Akaza
         in [:OPCALL, recv, :!, nil]
           commands.concat compile_expr(recv)
           commands << [:flow, :call, op_not_label]
-        in [:OPCALL, l, sym, [:ARRAY, r, nil]]
+        in [:OPCALL, l, :+ | :- | :* | :/ | :% => sym, [:ARRAY, r, nil]]
           com = {'+': :add, '-': :sub, '*': :multi, '/': :div, '%': :mod}[sym]
-          raise ParseError, "Unknown symbol: #{sym}" unless com
           commands.concat(compile_expr(l))
           commands.concat(UNWRAP_COMMANDS)
           commands.concat(compile_expr(r))
           commands.concat(UNWRAP_COMMANDS)
           commands << [:calc, com]
           commands.concat(WRAP_NUMBER_COMMANDS)
+        in [:OPCALL, recv, op, [:ARRAY, *args, nil]]
+          commands.concat compile_expr(recv)
+          commands.concat compile_call_with_recv(op, args, error_target_node: recv, explicit_self: true)
         in [:VCALL, :exit]
           commands << [:flow, :exit]
         in [:LASGN, var, arg]
@@ -860,164 +843,6 @@ module Akaza
         )
       end
 
-      # Object#<=>
-      # stack: [left, right]
-      # return stack: [-1/0/1]
-      #   if left < rigth  then -1
-      #   if left == rigth then 0
-      #   if left > rigth then 1
-      private def op_spaceship_label
-        @op_spaceship_label ||= (
-          label = ident_to_label(nil)
-          zero_label = ident_to_label(nil)
-          end_label = ident_to_label(nil)
-          neg_label = ident_to_label(nil)
-          commands = []
-          commands << [:flow, :def, label]
-
-          commands << [:calc, :sub]
-          commands << [:stack, :dup]
-          commands << [:flow, :jump_if_zero, zero_label]
-
-          commands << [:flow, :jump_if_neg, neg_label]
-
-          # if positive
-          commands << [:stack, :push, with_type(1, TYPE_INT)]
-          commands << [:flow, :jump, end_label]
-
-          # if negative
-          commands << [:flow, :def, neg_label]
-          commands << [:stack, :push, with_type(-1, TYPE_INT)]
-          commands << [:flow, :jump, end_label]
-
-          # if equal
-          commands << [:flow, :def, zero_label]
-          commands << [:stack, :pop]
-          commands << [:stack, :push, with_type(0, TYPE_INT)]
-
-          commands << [:flow, :def, end_label]
-          commands << [:flow, :end]
-          @methods << commands
-          label
-        )
-      end
-
-      # Object#<
-      # stack: [left, right]
-      # return stack: [TRUE/FALSE]
-      private def op_lt_label
-        @op_lt_label ||= (
-          label = ident_to_label(nil)
-          true_label = ident_to_label(nil)
-          end_label = ident_to_label(nil)
-          commands = []
-          commands << [:flow, :def, label]
-
-          commands << [:flow, :call, op_spaceship_label]
-          commands << [:flow, :jump_if_neg, true_label]
-
-          commands << [:stack, :push, FALSE]
-          commands << [:flow, :jump, end_label]
-
-          commands << [:flow, :def, true_label]
-          commands << [:stack, :push, TRUE]
-
-          commands << [:flow, :def, end_label]
-          commands << [:flow, :end]
-          @methods << commands
-          label
-        )
-      end
-
-      # Object#>
-      # stack: [left, right]
-      # return stack: [TRUE/FALSE]
-      private def op_gt_label
-        @op_gt_label ||= (
-          label = ident_to_label(nil)
-          false_label = ident_to_label(nil)
-          end_label = ident_to_label(nil)
-          commands = []
-          commands << [:flow, :def, label]
-
-          commands << [:flow, :call, op_spaceship_label]
-          commands << [:flow, :jump_if_neg, false_label]
-
-          commands << [:stack, :push, TRUE]
-          commands << [:flow, :jump, end_label]
-
-          commands << [:flow, :def, false_label]
-          commands << [:stack, :push, FALSE]
-
-          commands << [:flow, :def, end_label]
-          commands << [:flow, :end]
-          @methods << commands
-          label
-        )
-      end
-
-      # Object#<=
-      # stack: [left, right]
-      # return stack: [TRUE/FALSE]
-      private def op_lteq_label
-        @op_lteq_label ||= (
-          label = ident_to_label(nil)
-          true_label = ident_to_label(nil)
-          end_label = ident_to_label(nil)
-          commands = []
-          commands << [:flow, :def, label]
-
-          commands << [:flow, :call, op_spaceship_label]
-          commands.concat UNWRAP_COMMANDS
-          commands << [:stack, :push, 1]
-          commands << [:calc, :sub]
-          commands << [:flow, :jump_if_neg, true_label]
-
-          commands << [:stack, :push, FALSE]
-          commands << [:flow, :jump, end_label]
-
-          commands << [:flow, :def, true_label]
-          commands << [:stack, :push, TRUE]
-
-          commands << [:flow, :def, end_label]
-          commands << [:flow, :end]
-          @methods << commands
-          label
-        )
-      end
-
-      # Object#>=
-      # stack: [left, right]
-      # return stack: [TRUE/FALSE]
-      private def op_gteq_label
-        @op_gteq_label ||= (
-          label = ident_to_label(nil)
-          true_label = ident_to_label(nil)
-          end_label = ident_to_label(nil)
-          commands = []
-          commands << [:flow, :def, label]
-
-          commands << [:flow, :call, op_spaceship_label]
-          commands.concat UNWRAP_COMMANDS
-          commands << [:stack, :push, 1]
-          commands << [:calc, :add]
-          commands << [:stack, :push, -1]
-          commands << [:calc, :multi]
-          commands << [:flow, :jump_if_neg, true_label]
-
-          commands << [:stack, :push, FALSE]
-          commands << [:flow, :jump, end_label]
-
-          commands << [:flow, :def, true_label]
-          commands << [:stack, :push, TRUE]
-
-          commands << [:flow, :def, end_label]
-          commands << [:flow, :end]
-          @methods << commands
-          label
-        )
-      end
-
       # stack: [obj]
       # return stack: [TRUE/FALSE]
       private def op_not_label
@@ -1463,6 +1288,46 @@ module Akaza
         commands << [:flow, :end]
         @methods << commands
       end
+
+      # Integer#<=>
+      # stack: [right, left]
+      # return stack: [-1/0/1]
+      #   if left < rigth  then -1
+      #   if left == rigth then 0
+      #   if left > rigth then 1
+      private def define_op_spaceship
+        label = ident_to_label(:'Integer#<=>')
+        zero_label = ident_to_label(nil)
+        end_label = ident_to_label(nil)
+        neg_label = ident_to_label(nil)
+        commands = []
+        commands << [:flow, :def, label]
+
+        commands << [:calc, :sub]
+        commands << [:stack, :dup]
+        commands << [:flow, :jump_if_zero, zero_label]
+
+        commands << [:flow, :jump_if_neg, neg_label]
+
+        # if positive
+        commands << [:stack, :push, with_type(-1, TYPE_INT)]
+        commands << [:flow, :jump, end_label]
+
+        # if negative
+        commands << [:flow, :def, neg_label]
+        commands << [:stack, :push, with_type(1, TYPE_INT)]
+        commands << [:flow, :jump, end_label]
+
+        # if equal
+        commands << [:flow, :def, zero_label]
+        commands << [:stack, :pop]
+        commands << [:stack, :push, with_type(0, TYPE_INT)]
+
+        commands << [:flow, :def, end_label]
+        commands << [:flow, :end]
+        @methods << commands
+      end
+
 
       private def check_char!(char)
         raise ParseError, "String size must be 1, but it's #{char} (#{char.size})" if char.size != 1
