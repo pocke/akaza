@@ -1029,12 +1029,17 @@ module Akaza
 
       # Array#size
       # stack: [recv]
+      # return stack: [int]
       private def define_array_size
         label = ident_to_label(:'Array#size')
         commands = []
         commands << [:flow, :def, label]
 
-        # TODO
+        commands.concat UNWRAP_COMMANDS
+        commands << [:stack, :push, 1]
+        commands << [:calc, :add]
+        commands << [:heap, :load]
+        commands.concat WRAP_NUMBER_COMMANDS
 
         commands << [:flow, :end]
         # stack: [first_item]

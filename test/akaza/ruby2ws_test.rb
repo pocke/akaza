@@ -581,6 +581,21 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_array_size
+    assert_eval '0,1,5', <<~RUBY
+      x = []
+      put_as_number x.size
+      put_as_char ','
+
+      y = [42]
+      put_as_number y.size
+      put_as_char ','
+
+      z = [2, 3, 5, 7, 11]
+      put_as_number z.size
+    RUBY
+  end
+
   def test_transpile_hash_empty
     assert_eval '', <<~RUBY
       x = {}
