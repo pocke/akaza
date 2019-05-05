@@ -211,6 +211,7 @@ A linked list.
 
 An Array object uses two heap.
 
+* address to the next address
 * address to the first item
 * Array size
 
@@ -229,7 +230,7 @@ It is implemented with Hash table and use chaining to resolve collision.
 
 A Hash object uses one heap.
 
-* address to the first item
+* address to the first item (wrapped with type)
 
 An item uses three heaps.
 

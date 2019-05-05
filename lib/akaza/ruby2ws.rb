@@ -149,6 +149,7 @@ module Akaza
       def transpile
         commands = []
         # define built-in functions
+        define_array_size
         define_array_shift
         define_array_unshift
         define_array_ref
@@ -337,18 +338,7 @@ module Akaza
           commands << [:stack, :push, variable_name_to_addr(name)]
           commands << [:heap, :load]
         in [:ARRAY, *items, nil]
-          commands.concat ALLOCATE_HEAP_COMMANDS
-          commands << [:stack, :dup]
-          commands << [:stack, :dup]
-          # stack: [array_addr, array_addr, array_addr]
-          commands << [:stack, :push, 2]
-          commands << [:calc, :add]
-          # stack: [array_addr, array_addr, first_item_addr]
-          commands << [:heap, :save]
-          # stack: [array_addr]
-          commands.concat ALLOCATE_HEAP_COMMANDS
-          commands << [:stack, :push, with_type(items.size, TYPE_INT)]
-          commands << [:heap, :save]
+          commands.concat allocate_array_commands(items.size)
 
           items.each.with_index do |item, index|
             # save value
@@ -368,19 +358,9 @@ module Akaza
             commands << [:heap, :save]
           end
 
-          commands.concat WRAP_ARRAY_COMMANDS
         in [:ZARRAY]
           # Allocate array ref
-          commands.concat ALLOCATE_HEAP_COMMANDS
-          commands << [:stack, :dup]
-          commands << [:stack, :push, NONE_ADDR]
-          commands << [:heap, :save]
-          # stack: [array_addr]
-          # Allocate array size
-          commands.concat ALLOCATE_HEAP_COMMANDS
-          commands << [:stack, :push, with_type(0, TYPE_INT)]
-          commands << [:heap, :save]
-          commands.concat WRAP_ARRAY_COMMANDS
+          commands.concat allocate_array_commands(0, zarray: true)
         in [:HASH, nil]
           commands.concat initialize_hash
         in [:HASH, [:ARRAY, *pairs, nil]]
@@ -1016,6 +996,49 @@ module Akaza
           @methods << commands
           label
         )
+      end
+
+      # stack: []
+      # return stack: [array]
+      private def allocate_array_commands(size, zarray: false)
+        commands = []
+
+        commands.concat ALLOCATE_HEAP_COMMANDS
+        commands << [:stack, :dup]
+        commands.concat WRAP_ARRAY_COMMANDS
+        commands.concat SAVE_TMP_COMMANDS
+        commands << [:stack, :pop]
+
+        if zarray
+          commands << [:stack, :push, NONE_ADDR]
+        else
+          commands << [:stack, :dup]
+          commands << [:stack, :push, 2]
+          commands << [:calc, :add]
+        end
+        commands << [:heap, :save]
+
+        # Allocate size
+        commands.concat ALLOCATE_HEAP_COMMANDS
+        commands << [:stack, :push, size]
+        commands << [:heap, :save]
+        # stack: []
+        commands.concat LOAD_TMP_COMMANDS
+        # stack: [array]
+      end
+
+      # Array#size
+      # stack: [recv]
+      private def define_array_size
+        label = ident_to_label(:'Array#size')
+        commands = []
+        commands << [:flow, :def, label]
+
+        # TODO
+
+        commands << [:flow, :end]
+        # stack: [first_item]
+        @methods << commands
       end
 
       # Array#shift
