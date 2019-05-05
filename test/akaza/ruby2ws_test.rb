@@ -444,6 +444,16 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_while3
+    assert_eval "42", <<~RUBY
+      flag = true
+      while flag
+        put_as_number 42
+        flag = false
+      end
+    RUBY
+  end
+
   def test_transpile_fizzbuzz
     assert_eval "1 2 fizz 4 buzz fizz 7 8 fizz buzz 11 fizz 13 14 fizzbuzz ", <<~RUBY, StringIO.new("15\n")
       def fizz

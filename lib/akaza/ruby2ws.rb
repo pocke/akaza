@@ -740,6 +740,16 @@ module Akaza
           make_body.(x, :jump_if_neg)
         in [:OPCALL, [:LIT, 0], :<, [:ARRAY, x, nil]]
           make_body.(x, :jump_if_neg)
+        else
+          commands << [:flow, :def, cond_label]
+          commands.concat(compile_expr(cond))
+          commands << [:flow, :call, rtest_label]
+          commands << [:flow, :jump_if_zero, body_label]
+          commands << [:flow, :jump, end_label]
+          commands << [:flow, :def, body_label]
+          commands.concat(compile_expr(body))
+          commands << [:flow, :jump, cond_label]
+          commands << [:flow, :def, end_label]
         end
 
         commands
