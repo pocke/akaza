@@ -104,6 +104,13 @@ module Akaza
       [:stack, :swap],
       [:heap, :save],
     ].freeze
+    # Return an address that will be allocated by ALLOCATE_HEAP_COMMANDS
+    NEXT_HEAP_ADDRESS = [
+      [:stack, :push, HEAP_COUNT_ADDR],
+      [:heap, :load],
+      [:stack, :push, 1],
+      [:calc, :add],
+    ].freeze
     ALLOCATE_NEW_HASH_ITEM_COMMANDS = [
       *ALLOCATE_HEAP_COMMANDS,
       [:stack, :dup],
@@ -828,6 +835,98 @@ module Akaza
         commands
       end
 
+      # stack: [addr_of_first_addr]
+      # return stack: []
+      private def realloc_array_label
+        @realloc_array_label ||= (
+          label = ident_to_label(nil)
+          commands = []
+          commands << [:flow, :def, label]
+
+          # stack: [addr_of_first_addr]
+          # Get cap addr
+          commands << [:stack, :dup]
+          commands << [:stack, :push, 2]
+          commands << [:calc, :add]
+          commands << [:stack, :dup]
+          commands << [:heap, :load]
+          # stack: [addr_of_first_addr, cap_addr, cap]
+          commands << [:stack, :push, 2]
+          commands << [:calc, :multi]
+          # stack: [addr_of_first_addr, cap_addr, new_cap]
+          # Update cap
+          commands.concat SAVE_TMP_COMMANDS
+          commands << [:heap, :save]
+          commands.concat LOAD_TMP_COMMANDS
+          # stack: [addr_of_first_addr, new_cap]
+          commands.concat NEXT_HEAP_ADDRESS
+          commands.concat SAVE_TMP_COMMANDS # new_item_addr
+          commands << [:stack, :pop]
+          # Allocate new addresses
+          commands.concat(times do
+            c = []
+            c.concat ALLOCATE_HEAP_COMMANDS
+            c << [:stack, :pop]
+            c
+          end)
+          commands << [:stack, :pop]
+          # stack: [addr_of_first_addr]
+          commands << [:stack, :dup]
+          commands << [:heap, :load]
+          # stack: [addr_of_first_addr, old_first_addr]
+          # Update first addr
+          commands << [:stack, :swap]
+          commands << [:stack, :dup]
+          commands.concat LOAD_TMP_COMMANDS
+          # stack: [old_first_addr, addr_of_first_addr, addr_of_first_addr, new_first_addr]
+          commands << [:heap, :save]
+          commands << [:stack, :swap]
+          # stack: [addr_of_first_addr, old_first_addr]
+          # Load size
+          commands << [:stack, :dup]
+          commands << [:stack, :push, 1]
+          commands << [:calc, :add]
+          commands << [:heap, :load]
+          # stack: [addr_of_first_addr, old_first_addr, size]
+          # Move old items to new addresses
+          commands.concat(times do
+            c = []
+            c << [:stack, :swap]
+            # stack: [addr_of_first_addr, idx, old_target_addr]
+            c << [:stack, :dup]
+            c.concat LOAD_TMP_COMMANDS
+            # stack: [addr_of_first_addr, idx, old_target_addr, old_target_addr, new_target_addr]
+
+            # Update tmp to new_next_addr
+            c << [:stack, :dup]
+            c << [:stack, :push, 1]
+            c << [:calc, :add]
+            c.concat SAVE_TMP_COMMANDS
+            c << [:stack, :pop]
+
+            # stack: [addr_of_first_addr, idx, old_target_addr, old_target_addr, new_target_addr]
+            c << [:stack, :swap]
+            c << [:heap, :load]
+            # stack: [addr_of_first_addr, idx, old_target_addr, new_target_addr, old_target]
+            c << [:heap, :save]
+            # stack: [addr_of_first_addr, idx, old_target_addr]
+            c << [:stack, :push, 1]
+            c << [:calc, :add]
+            # stack: [addr_of_first_addr, old_next_addr, idx]
+            c << [:stack, :swap]
+            c
+          end)
+          commands << [:stack, :pop] # idx
+          commands << [:stack, :pop] # old_next_addr
+          commands << [:stack, :pop] # addr_of_first_addr
+
+
+          commands << [:flow, :end]
+          @methods << commands
+          label
+        )
+      end
+
       # stack: [left, right]
       # return stack: [TRUE/FALSE]
       private def op_eqeq_label
@@ -1133,113 +1232,75 @@ module Akaza
         @methods << commands
       end
 
+      # Array#push
+      # stack: [item]
+      # return stack: [self]
       private def define_array_push
-        # TODO
-      end
-
-      # Array#shift
-      # stack: []
-      private def define_array_shift
-        label = ident_to_label(:'Array#shift')
-        when_empty_label = ident_to_label(nil)
+        label = ident_to_label(:'Array#push')
+        when_realloc_label = ident_to_label(nil)
+        when_no_realloc_label = ident_to_label(nil)
         commands = []
         commands << [:flow, :def, label]
 
         commands.concat load_from_self_commands
-
         commands.concat(UNWRAP_COMMANDS)
-        # Reduce size
+        # stack: [item, addr_of_first_addr]
+
+        # Check realloc necessary
         commands << [:stack, :dup]
         commands << [:stack, :push, 1]
         commands << [:calc, :add]
+        # stack: [item, addr_of_first_addr, addr_of_size]
         commands << [:stack, :dup]
-        commands << [:heap, :load]
-        # stack: [unwrapped_addr_of_array, addr_of_size, size]
-        commands << [:stack, :dup]
-        commands << [:flow, :jump_if_zero, when_empty_label]
         commands << [:stack, :push, 1]
+        commands << [:calc, :add]
+        # stack: [item, addr_of_first_addr, addr_of_size, addr_of_cap]
+        commands << [:heap, :load]
+        commands << [:stack, :swap]
+        commands << [:heap, :load]
+        # stack: [item, addr_of_first_addr, cap, size]
         commands << [:calc, :sub]
-        commands << [:heap, :save]
+        commands << [:flow, :jump_if_zero, when_realloc_label]
+        commands << [:flow, :jump, when_no_realloc_label]
 
-        # main
+        # Realloc
+        commands << [:flow, :def, when_realloc_label]
         commands << [:stack, :dup]
-        commands << [:heap, :load]
-        # stack: [unwrapped_addr_of_array, addr_of_first_item]
-        commands << [:stack, :swap]
-        commands << [:stack, :dup]
-        commands << [:heap, :load]
-        # stack: [addr_of_first_item, unwrapped_addr_of_array, addr_of_first_item]
+        commands << [:flow, :call, realloc_array_label]
 
-        commands << [:stack, :push, 1]
-        commands << [:calc, :add]
-        commands << [:heap, :load]
-        # stack: [addr_of_first_item, unwrapped_addr_of_array, addr_of_second_item]
+        commands << [:flow, :def, when_no_realloc_label]
 
-        commands << [:heap, :save]
-        # stack: [addr_of_first_item]
-
-        commands << [:heap, :load]
-        commands << [:flow, :end]
-        # stack: [first_item]
-
-        commands << [:flow, :def, when_empty_label]
-        # stack: [unwrapped_addr_of_array, addr_of_size, size]
-        commands << [:stack, :pop]
-        commands << [:stack, :pop]
-        commands << [:stack, :pop]
-        commands << [:stack, :push, NIL]
-        commands << [:flow, :end]
-
-        @methods << commands
-      end
-
-      # Array#unshift
-      # stack: [arg]
-      private def define_array_unshift
-        label = ident_to_label(:'Array#unshift')
-        commands = []
-        commands << [:flow, :def, label]
-
-        commands.concat SAVE_TMP_COMMANDS
-        commands << [:stack, :pop]
-        # stack: []
-        commands.concat load_from_self_commands
-        commands.concat(UNWRAP_COMMANDS)
-        # stack: [unwrapped_addr_of_array]
-
-        # Increase size
+        # Push
+        # stack: [item, addr_of_first_addr]
         commands << [:stack, :dup]
         commands << [:stack, :push, 1]
         commands << [:calc, :add]
-        commands << [:stack, :dup]
         commands << [:heap, :load]
-        # stack: [unwrapped_addr_of_array, addr_of_size, size]
-        commands << [:stack, :push, 1]
+        # stack: [item, addr_of_first_addr, size]
+        commands << [:stack, :swap]
+        commands << [:heap, :load]
+        # stack: [item, size, first_addr]
         commands << [:calc, :add]
-        commands << [:heap, :save]
-        # End increase size
-
-        commands << [:stack, :dup]
-        commands << [:heap, :load]
-        # stack: [unwrapped_addr_of_array, addr_of_first_item]
-
-        # Allocate a new item
-        commands.concat ALLOCATE_HEAP_COMMANDS
-        commands << [:stack, :dup]
-        commands.concat LOAD_TMP_COMMANDS
-        commands << [:heap, :save]
-        # stack: [unwrapped_addr_of_array, addr_of_first_item, new_item_value_addr]
+        # stack: [item, addr_of_target]
         commands << [:stack, :swap]
-        commands.concat ALLOCATE_HEAP_COMMANDS
-        # stack: [unwrapped_addr_of_array, new_item_value_addr, addr_of_first_item, new_item_next_addr_addr]
-        commands << [:stack, :swap]
-        commands << [:heap, :save]
-        # stack: [unwrapped_addr_of_array, new_item_value_addr]
         commands << [:heap, :save]
 
         commands.concat load_from_self_commands
+        # Update size
+        commands << [:stack, :dup]
+        commands.concat UNWRAP_COMMANDS
+        # stack: [self, addr_of_first_addr]
+        commands << [:stack, :push, 1]
+        commands << [:calc, :add]
+        commands << [:stack, :dup]
+        commands << [:heap, :load]
+        # stack: [self, size_addr, size]
+        commands << [:stack, :push, 1]
+        commands << [:calc, :add]
+        commands << [:heap, :save]
+
+        commands << [:flow, :end]
         # stack: [self]
-        commands << [:flow, :end]
         @methods << commands
       end
 
