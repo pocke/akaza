@@ -267,7 +267,6 @@ module Akaza
           m = [
             [:flow, :def, label],
           ]
-          self_addr = variable_name_to_addr(:self)
           m.concat update_lvar_commands(lvar_table)
           lvar_table[0...args_count].reverse.each do |args_name|
             addr = variable_name_to_addr(args_name)
