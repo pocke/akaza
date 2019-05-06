@@ -1306,6 +1306,7 @@ module Akaza
 
       # Array#[]
       # stack: [index]
+      # return stack: [item]
       private def define_array_ref
         label = ident_to_label(:'Array#[]')
 
@@ -1319,20 +1320,8 @@ module Akaza
         commands << [:stack, :swap]
         commands.concat(UNWRAP_COMMANDS)
         # stack: [addr_of_first_item, index]
-
-        commands.concat(times do
-          c = []
-          c << [:stack, :swap]
-          # stack: [index, addr_of_first_item]
-          c << [:stack, :push, 1]
-          c << [:calc, :add]
-          c << [:heap, :load]
-          # stack: [index, addr_of_next_item]
-          c << [:stack, :swap]
-          c
-        end)
-        commands << [:stack, :pop]
-        # stack: [addr_of_the_target_item]
+        commands << [:calc, :add]
+        # TODO: range check and return nil
         commands << [:heap, :load]
 
         commands << [:flow, :end]
