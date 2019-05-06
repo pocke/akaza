@@ -122,8 +122,8 @@ class Ruby2wsTest < Minitest::Test
   def test_transpile_class
     assert_eval "40,42", <<~RUBY
       class Array
-        def prepend(x)
-          self.unshift(x)
+        def ps(x)
+          self.push(x)
         end
       end
 
@@ -134,7 +134,7 @@ class Ruby2wsTest < Minitest::Test
       end
 
       x = []
-      x.prepend(40)
+      x.ps(40)
       put_as_number x[0]
 
       put_as_char ','
@@ -147,44 +147,44 @@ class Ruby2wsTest < Minitest::Test
   def test_transpile_class_fcall_1
     assert_eval "40", <<~RUBY
       class Array
-        def prepend(x)
-          self.unshift(x)
+        def ps(x)
+          self.push(x)
         end
 
-        def prepend2(x)
-          prepend(x)
+        def ps2(x)
+          ps(x)
         end
       end
 
       x = []
-      x.prepend2(40)
+      x.ps2(40)
       put_as_number x[0]
     RUBY
   end
 
-  def test_transpile_class_fcall_shift
+  def test_transpile_class_fcall_pop
     assert_eval "40", <<~RUBY
       class Array
-        def shift2
-          shift
+        def pop2
+          pop
         end
       end
 
       x = [40]
-      put_as_number x.shift2
+      put_as_number x.pop2
     RUBY
   end
 
-  def test_transpile_class_fcall_unshift
+  def test_transpile_class_fcall_push
     assert_eval "40", <<~RUBY
       class Array
-        def prepend(x)
-          unshift(x)
+        def push2(x)
+          push(x)
         end
       end
 
       x = []
-      x.prepend(40)
+      x.push2(40)
       put_as_number x[0]
     RUBY
   end
@@ -567,55 +567,55 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
-  def test_transpile_array_shift
-    assert_eval "123", <<~RUBY
+  def test_transpile_array_pop
+    assert_eval "321", <<~RUBY
       addr = [1, 2, 3]
       addr2 = addr
-      put_as_number addr.shift
-      put_as_number addr2.shift
-      put_as_number addr.shift
+      put_as_number addr.pop
+      put_as_number addr2.pop
+      put_as_number addr.pop
     RUBY
   end
 
-  def test_transpile_array_shift_when_empty
-    assert_eval "12o", <<~RUBY
+  def test_transpile_array_pop_when_empty
+    assert_eval "21o", <<~RUBY
       addr = [1, 2]
       addr2 = addr
-      put_as_number addr.shift
-      put_as_number addr2.shift
-      put_as_char 'o' if addr.shift == nil
+      put_as_number addr.pop
+      put_as_number addr2.pop
+      put_as_char 'o' if addr.pop == nil
     RUBY
   end
 
-  def test_transpile_array_shift_size
+  def test_transpile_array_pop_size
     assert_eval "221100", <<~RUBY
       arr = [1, 2, 3]
       arr2 = arr
 
-      arr.shift
+      arr.pop
       put_as_number arr.size
       put_as_number arr2.size
-      arr2.shift
+      arr2.pop
       put_as_number arr.size
       put_as_number arr2.size
-      arr.shift
+      arr.pop
       put_as_number arr.size
       put_as_number arr2.size
     RUBY
   end
 
-  def test_transpile_array_unshift_size
+  def test_transpile_array_push_size
     assert_eval "112233", <<~RUBY
       arr = []
       arr2 = arr
 
-      arr.unshift 1
+      arr.push 1
       put_as_number arr.size
       put_as_number arr2.size
-      arr2.unshift 5
+      arr2.push 5
       put_as_number arr.size
       put_as_number arr2.size
-      arr.unshift 30
+      arr.push 30
       put_as_number arr.size
       put_as_number arr2.size
     RUBY
@@ -636,49 +636,49 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
-  def test_transpile_array_unshift
+  def test_transpile_array_push
     assert_eval "123", <<~RUBY
       addr = [3]
       addr2 = addr
-      addr2.unshift 2
-      addr.unshift 1
+      addr2.push 2
+      addr.push 1
 
-      put_as_number addr.shift
-      put_as_number addr.shift
-      put_as_number addr.shift
+      put_as_number addr.pop
+      put_as_number addr.pop
+      put_as_number addr.pop
     RUBY
   end
 
-  def test_transpile_unshift_return_value
+  def test_transpile_push_return_value
     assert_eval "123", <<~RUBY
       addr = [3]
-      addr2 = addr.unshift 2
-      addr.unshift 1
+      addr2 = addr.push 2
+      addr.push 1
 
-      put_as_number addr.shift
-      put_as_number addr.shift
-      put_as_number addr2.shift
+      put_as_number addr.pop
+      put_as_number addr.pop
+      put_as_number addr2.pop
     RUBY
   end
 
   def test_transpile_array_def
-    assert_eval "123", <<~RUBY
-      def shift(array)
-        put_as_number array.shift
+    assert_eval "321", <<~RUBY
+      def pop(array)
+        put_as_number array.pop
       end
 
       array = [1, 2, 3]
-      put_as_number array.shift
-      shift array
-      put_as_number array.shift
+      put_as_number array.pop
+      pop array
+      put_as_number array.pop
     RUBY
   end
 
   def test_transpile_zarray
     assert_eval "1", <<~RUBY
       x = []
-      x.unshift 1
-      put_as_number x.shift
+      x.push 1
+      put_as_number x.pop
     RUBY
   end
 
@@ -700,6 +700,47 @@ class Ruby2wsTest < Minitest::Test
       put_as_number x[0]
       put_as_number x[1]
       put_as_number x[2]
+    RUBY
+  end
+
+  def test_transpile_array_long_lit
+    assert_eval '4,12', <<~RUBY
+      x = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+      put_as_number x[3]
+      put_as_char ','
+      put_as_number x[11]
+    RUBY
+  end
+
+  def test_transpile_array_realloc_1
+    assert_eval '6,38,20', <<~RUBY
+      x = []
+      i = 0
+      while i < 20
+        x.push i * 2
+        i = i + 1
+      end
+      put_as_number x[3]
+      put_as_char ','
+      put_as_number x[19]
+      put_as_char ','
+      put_as_number x.size
+    RUBY
+  end
+
+  def test_transpile_array_realloc_2
+    assert_eval '6,38,30', <<~RUBY
+      x = []
+      i = 0
+      while i < 30
+        x.push i * 2
+        i = i + 1
+      end
+      put_as_number x[3]
+      put_as_char ','
+      put_as_number x[19]
+      put_as_char ','
+      put_as_number x.size
     RUBY
   end
 
@@ -900,8 +941,25 @@ class Ruby2wsTest < Minitest::Test
     assert_eval '123', <<~RUBY
       c = [1, 123]
       s = []
-      s.unshift c[1]
+      s.push c[1]
       put_as_number s[0]
+    RUBY
+  end
+
+  def test_transpile_compare
+    # true: 2, false: 0
+    assert_eval "0,2,0,2,0,2", <<~RUBY
+      put_as_number(4 == nil)
+      put_as_char ','
+      put_as_number(nil == nil)
+      put_as_char ','
+      put_as_number(0 == false)
+      put_as_char ','
+      put_as_number(false == false)
+      put_as_char ','
+      put_as_number(2 == true)
+      put_as_char ','
+      put_as_number(true == true)
     RUBY
   end
 

@@ -96,7 +96,7 @@ put_as_number 42  # => 42
 
 ### Array
 
-You can use Array. It is implemented as a linked list.
+You can use Array
 
 Must not access to out of range of array.
 
@@ -107,12 +107,12 @@ put_as_number x[0]
 
 It support only a few methods.
 
-* `shift`
+* `push`
 * `unshift`
 * `[]`
   * It does not support negative index. Use `array[array.size - 1]` instead of `array[-1]`. (Implementing pull request is welcome!)
 * `[]=`
-  * It works only with existing index. Use `Array#shift` to add a value to not initialized place.
+  * It works only with existing index. Use `Array#push` to add a value to not initialized place.
 * `first`
 * `size`
 
@@ -210,19 +210,12 @@ Implementation
 
 ### Array
 
-A linked list.
-
-An Array object uses two heap.
+An Array object uses three heap.
 
 * address to the first item
 * Array size
+* capacity
 
-An item uses two heaps.
-
-* value
-* address to the next item
-
-Address to the next item will be `NONE_ADDR` if the item is the last.
 
 
 ### Hash
