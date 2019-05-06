@@ -1313,12 +1313,11 @@ module Akaza
         commands = []
         commands << [:flow, :def, label]
 
+        commands.concat(UNWRAP_COMMANDS)
         commands.concat load_from_self_commands
         # stack: [index, recv]
         commands.concat(UNWRAP_COMMANDS)
         commands << [:heap, :load]
-        commands << [:stack, :swap]
-        commands.concat(UNWRAP_COMMANDS)
         # stack: [addr_of_first_item, index]
         commands << [:calc, :add]
         # TODO: range check and return nil
@@ -1329,9 +1328,9 @@ module Akaza
       end
 
       # Array#[]=
-      # stack: [index, value, recv]
-      private def define_array_attr_asgn
       # stack: [index, value]
+      # return stack: [value]
+      private def define_array_attr_asgn
         label = ident_to_label(:'Array#[]=')
 
         commands = []
@@ -1339,34 +1338,19 @@ module Akaza
 
         commands << [:stack, :swap]
         # stack: [value, index]
-
+        commands.concat UNWRAP_COMMANDS
         commands.concat load_from_self_commands
         commands.concat(UNWRAP_COMMANDS)
         commands << [:heap, :load]
+        # stack: [value, index, first_addr]
+        commands << [:calc, :add]
+        # TODO: range check and realloc
         commands << [:stack, :swap]
-        # stack: [value, addr_of_first_item, index]
-
-        commands.concat(UNWRAP_COMMANDS)
-        commands.concat(times do
-          c = []
-          c << [:stack, :swap]
-          # stack: [value, index, addr_of_first_item]
-          c << [:stack, :push, 1]
-          c << [:calc, :add]
-          c << [:heap, :load]
-          # stack: [value, index, addr_of_next_item]
-          c << [:stack, :swap]
-          c
-        end)
-        commands << [:stack, :pop] # pop index
+        # stack: [target_addr, value]
         commands.concat SAVE_TMP_COMMANDS
-        # stack: [value, addr_of_the_target_item]
-
-        commands << [:stack, :swap]
         commands << [:heap, :save]
-        # stack: []
         commands.concat LOAD_TMP_COMMANDS
-        commands << [:heap, :load]
+        # stack: [value]
 
         commands << [:flow, :end]
         @methods << commands
