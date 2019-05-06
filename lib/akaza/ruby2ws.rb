@@ -50,6 +50,8 @@ module Akaza
 
     HASH_SIZE = 11
 
+    ARRAY_FIRST_CAPACITY = 10
+
     FALSE = 0 << TYPE_BITS + TYPE_SPECIAL
     # NONE is for internal. It does not available for user.
     NONE = 1 << TYPE_BITS + TYPE_SPECIAL
@@ -80,6 +82,7 @@ module Akaza
       [:stack, :push, TYPE_HASH],
       [:calc, :add],
     ].freeze
+    # OPTIMIZE
     SAVE_TMP_COMMANDS = [
       [:stack, :dup],
       [:stack, :push, TMP_ADDR],
@@ -137,7 +140,7 @@ module Akaza
         # Array<Array<Command>>
         @methods = []
         @method_table = {
-          Array: [:size, :unshift, :shift, :[], :[]=],
+          Array: [:size, :push, :pop, :[], :[]=],
           Integer: [],
           Hash: [:[], :[]=],
         }
@@ -150,8 +153,8 @@ module Akaza
         commands = []
         # define built-in functions
         define_array_size
-        define_array_shift
-        define_array_unshift
+        define_array_pop
+        define_array_push
         define_array_ref
         define_array_attr_asgn
         define_hash_ref
@@ -336,41 +339,26 @@ module Akaza
           commands.concat allocate_array_commands(items.size)
           # stack: [array]
 
-          items.each.with_index do |item, index|
-            # if index != 0
-            #   # load prev item's next addr
-            #   commands.concat SAVE_TMP_COMMANDS
-            #   commands << [:stack, :pop]
-            # end
+          commands << [:stack, :dup]
+          commands.concat UNWRAP_COMMANDS
+          commands << [:stack, :push, 3]
+          commands << [:calc, :add]
+          # stack: [array, first_item_addr]
 
-            # Allocate heap for value
-            commands.concat ALLOCATE_HEAP_COMMANDS
-            # stack: [array, addr_of_value] if first
-            # stack: [array, prev_item_next_addr, addr_of_value] if not first
-
-            if index != 0
-              # Save prev item's next addr
-              commands.concat SAVE_TMP_COMMANDS
-              commands << [:heap, :save]
-              commands.concat LOAD_TMP_COMMANDS
-            end
-            # stack: [array, addr_of_value]
-
-            # Allocate heap for next addr
-            commands.concat ALLOCATE_HEAP_COMMANDS
-            # stack: [array, addr_of_value, addr_of_next_item]
-            commands << [:stack, :swap]
-
+          items.each do |item|
+            commands << [:stack, :dup]
+            # stack: [array, item_addr, item_addr]
             commands.concat compile_expr(item)
             commands << [:heap, :save]
+            commands << [:stack, :push, 1]
+            commands << [:calc, :add]
+            # stack: [array, next_item_addr]
           end
-          # stack: [array, last_item_next_addr]
-          commands << [:stack, :push, NONE_ADDR]
-          commands << [:heap, :save]
+          commands << [:stack, :pop]
 
         in [:ZARRAY]
           # Allocate array ref
-          commands.concat allocate_array_commands(0, zarray: true)
+          commands.concat allocate_array_commands(0)
         in [:HASH, nil]
           commands.concat initialize_hash
         in [:HASH, [:ARRAY, *pairs, nil]]
@@ -817,6 +805,7 @@ module Akaza
         commands
       end
 
+      # OPTIMIZE
       # stack: [self]
       # return stack: [self]
       private def save_to_self_commands
@@ -1033,7 +1022,7 @@ module Akaza
 
       # stack: []
       # return stack: [array]
-      private def allocate_array_commands(size, zarray: false)
+      private def allocate_array_commands(size)
         commands = []
 
         commands.concat ALLOCATE_HEAP_COMMANDS
@@ -1041,21 +1030,32 @@ module Akaza
         commands.concat WRAP_ARRAY_COMMANDS
         commands.concat SAVE_TMP_COMMANDS
         commands << [:stack, :pop]
+        # stack: [array_addr_1]
 
-        if zarray
-          commands << [:stack, :push, NONE_ADDR]
-        else
-          commands << [:stack, :dup]
-          commands << [:stack, :push, 2]
-          commands << [:calc, :add]
-        end
+        # Save first addr
+        commands << [:stack, :dup]
+        commands << [:stack, :push, 3]
+        commands << [:calc, :add]
         commands << [:heap, :save]
+        # stack: []
 
         # Allocate size
         commands.concat ALLOCATE_HEAP_COMMANDS
         commands << [:stack, :push, size]
         commands << [:heap, :save]
-        # stack: []
+
+        # Allocate cap
+        cap = ARRAY_FIRST_CAPACITY < size ? size * 2 : ARRAY_FIRST_CAPACITY
+        commands.concat ALLOCATE_HEAP_COMMANDS
+        commands << [:stack, :push, cap]
+        commands << [:heap, :save]
+
+        # Allocate body
+        cap.times do
+          commands.concat ALLOCATE_HEAP_COMMANDS
+          commands << [:stack, :pop]
+        end
+
         commands.concat LOAD_TMP_COMMANDS
         # stack: [array]
       end
@@ -1076,8 +1076,65 @@ module Akaza
         commands.concat WRAP_NUMBER_COMMANDS
 
         commands << [:flow, :end]
-        # stack: [first_item]
+        # stack: [size]
         @methods << commands
+      end
+
+      # Array#pop
+      # stack: []
+      # return stack: [obj]
+      private def define_array_pop
+        label = ident_to_label(:'Array#pop')
+        when_empty_label = ident_to_label(nil)
+        commands = []
+        commands << [:flow, :def, label]
+
+        commands.concat load_from_self_commands
+        commands.concat UNWRAP_COMMANDS
+        commands << [:stack, :push, 1]
+        commands << [:calc, :add]
+        commands << [:heap, :load]
+        # stack: [size]
+        # check empty
+        commands << [:stack, :dup]
+        commands << [:flow, :jump_if_zero, when_empty_label]
+
+        # when not empty
+        # Decrease size
+        commands << [:stack, :dup]
+        commands.concat load_from_self_commands
+        commands.concat UNWRAP_COMMANDS
+        commands << [:stack, :push, 1]
+        commands << [:calc, :add]
+        # stack: [size, size, size_addr]
+        commands << [:stack, :swap]
+        commands << [:stack, :push, 1]
+        commands << [:calc, :sub]
+        commands << [:heap, :save]
+        # Load item
+        commands.concat load_from_self_commands
+        commands.concat UNWRAP_COMMANDS
+        commands << [:heap, :load]
+        # stack: [size, first_addr]
+        commands << [:stack, :push, -1]
+        commands << [:calc, :add]
+        commands << [:calc, :add]
+        # stack: [addr_of_target_item]
+        commands << [:heap, :load]
+
+        commands << [:flow, :end]
+        # stack: [target_item]
+
+        commands << [:flow, :def, when_empty_label]
+        commands << [:stack, :pop]
+        commands << [:stack, :push, NIL]
+        commands << [:flow, :end]
+        # stack: [nil]
+        @methods << commands
+      end
+
+      private def define_array_push
+        # TODO
       end
 
       # Array#shift
