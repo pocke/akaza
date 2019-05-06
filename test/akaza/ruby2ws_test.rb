@@ -703,6 +703,47 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_array_long_lit
+    assert_eval '4,12', <<~RUBY
+      x = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+      put_as_number x[3]
+      put_as_char ','
+      put_as_number x[11]
+    RUBY
+  end
+
+  def test_transpile_array_realloc_1
+    assert_eval '6,38,20', <<~RUBY
+      x = []
+      i = 0
+      while i < 20
+        x.push i * 2
+        i = i + 1
+      end
+      put_as_number x[3]
+      put_as_char ','
+      put_as_number x[19]
+      put_as_char ','
+      put_as_number x.size
+    RUBY
+  end
+
+  def test_transpile_array_realloc_2
+    assert_eval '6,38,30', <<~RUBY
+      x = []
+      i = 0
+      while i < 30
+        x.push i * 2
+        i = i + 1
+      end
+      put_as_number x[3]
+      put_as_char ','
+      put_as_number x[19]
+      put_as_char ','
+      put_as_number x.size
+    RUBY
+  end
+
   def test_transpile_hash_empty
     assert_eval '', <<~RUBY
       x = {}

@@ -883,19 +883,19 @@ module Akaza
           commands << [:stack, :swap]
           # stack: [addr_of_first_addr, old_first_addr]
           # Load size
-          commands << [:stack, :dup]
+          commands << [:stack, :swap]
           commands << [:stack, :push, 1]
           commands << [:calc, :add]
           commands << [:heap, :load]
-          # stack: [addr_of_first_addr, old_first_addr, size]
+          # stack: [old_first_addr, size]
           # Move old items to new addresses
           commands.concat(times do
             c = []
             c << [:stack, :swap]
-            # stack: [addr_of_first_addr, idx, old_target_addr]
+            # stack: idx, old_target_addr]
             c << [:stack, :dup]
             c.concat LOAD_TMP_COMMANDS
-            # stack: [addr_of_first_addr, idx, old_target_addr, old_target_addr, new_target_addr]
+            # stack: [idx, old_target_addr, old_target_addr, new_target_addr]
 
             # Update tmp to new_next_addr
             c << [:stack, :dup]
@@ -904,21 +904,20 @@ module Akaza
             c.concat SAVE_TMP_COMMANDS
             c << [:stack, :pop]
 
-            # stack: [addr_of_first_addr, idx, old_target_addr, old_target_addr, new_target_addr]
+            # stack: [idx, old_target_addr, old_target_addr, new_target_addr]
             c << [:stack, :swap]
             c << [:heap, :load]
-            # stack: [addr_of_first_addr, idx, old_target_addr, new_target_addr, old_target]
+            # stack: [idx, old_target_addr, new_target_addr, old_target]
             c << [:heap, :save]
-            # stack: [addr_of_first_addr, idx, old_target_addr]
+            # stack: [idx, old_target_addr]
             c << [:stack, :push, 1]
             c << [:calc, :add]
-            # stack: [addr_of_first_addr, old_next_addr, idx]
+            # stack: [old_next_addr, idx]
             c << [:stack, :swap]
             c
           end)
           commands << [:stack, :pop] # idx
           commands << [:stack, :pop] # old_next_addr
-          commands << [:stack, :pop] # addr_of_first_addr
 
 
           commands << [:flow, :end]
