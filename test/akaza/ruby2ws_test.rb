@@ -946,6 +946,23 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_compare
+    # true: 2, false: 0
+    assert_eval "0,2,0,2,0,2", <<~RUBY
+      put_as_number(4 == nil)
+      put_as_char ','
+      put_as_number(nil == nil)
+      put_as_char ','
+      put_as_number(0 == false)
+      put_as_char ','
+      put_as_number(false == false)
+      put_as_char ','
+      put_as_number(2 == true)
+      put_as_char ','
+      put_as_number(true == true)
+    RUBY
+  end
+
   def assert_eval(expected_output, code, input = StringIO.new(''))
     ws = Akaza::Ruby2ws.ruby_to_ws(code)
     out = StringIO.new
