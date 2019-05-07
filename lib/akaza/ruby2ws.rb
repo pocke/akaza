@@ -82,9 +82,7 @@ module Akaza
       [:stack, :push, TYPE_HASH],
       [:calc, :add],
     ].freeze
-    # OPTIMIZE
     SAVE_TMP_COMMANDS = [
-      [:stack, :dup],
       [:stack, :push, TMP_ADDR],
       [:stack, :swap],
       [:heap, :save],
@@ -259,8 +257,6 @@ module Akaza
           commands << [:heap, :save]
         in [:ATTRASGN, recv, :[]=, [:ARRAY, index, value, nil]]
           commands.concat compile_expr(recv)
-          commands.concat SAVE_TMP_COMMANDS
-          commands.pop
           commands.concat compile_call_with_recv(:[]=, [index, value], error_target_node: node, explicit_self: true)
         in [:DEFN, name, [:SCOPE, lvar_table, [:ARGS, args_count ,*_], body]]
           label = @current_class ? ident_to_label(:"#{@current_class}##{name}") : ident_to_label(name)
@@ -372,7 +368,6 @@ module Akaza
           commands << [:stack, :dup]
           commands.concat UNWRAP_COMMANDS
           commands.concat SAVE_TMP_COMMANDS
-          commands << [:stack, :pop]
           # stack: [hash_object (unwrapped)]
           # tmp: hash_object (unwrapped)
 
@@ -536,12 +531,10 @@ module Akaza
       private def compile_call(name, args)
         commands = []
         commands.concat SAVE_TMP_COMMANDS
-        commands << [:stack, :pop]
         with_storing_lvars(commands) do
           # save self
           commands.concat LOAD_TMP_COMMANDS
           commands.concat save_to_self_commands
-          commands << [:stack, :pop]
 
           # push args
           args.each do |arg|
@@ -570,6 +563,7 @@ module Akaza
         is_none_label = ident_to_label(nil)
         end_label = ident_to_label(nil)
 
+        commands << [:stack, :dup]
         commands.concat SAVE_TMP_COMMANDS
 
         # is_a?(Integer)
@@ -811,13 +805,11 @@ module Akaza
         commands
       end
 
-      # OPTIMIZE
       # stack: [self]
-      # return stack: [self]
+      # return stack: []
       private def save_to_self_commands
         commands = []
         self_addr = variable_name_to_addr(:self)
-        commands << [:stack, :dup]
         commands << [:stack, :push, self_addr]
         commands << [:stack, :swap]
         commands << [:heap, :save]
@@ -854,13 +846,13 @@ module Akaza
           commands << [:calc, :multi]
           # stack: [addr_of_first_addr, cap_addr, new_cap]
           # Update cap
+          commands << [:stack, :dup]
           commands.concat SAVE_TMP_COMMANDS
           commands << [:heap, :save]
           commands.concat LOAD_TMP_COMMANDS
           # stack: [addr_of_first_addr, new_cap]
           commands.concat NEXT_HEAP_ADDRESS
           commands.concat SAVE_TMP_COMMANDS # new_item_addr
-          commands << [:stack, :pop]
           # Allocate new addresses
           commands.concat(times do
             c = []
@@ -901,7 +893,6 @@ module Akaza
             c << [:stack, :push, 1]
             c << [:calc, :add]
             c.concat SAVE_TMP_COMMANDS
-            c << [:stack, :pop]
 
             # stack: [idx, old_target_addr, old_target_addr, new_target_addr]
             c << [:stack, :swap]
@@ -1058,6 +1049,7 @@ module Akaza
           commands << [:heap, :load]
           commands << [:stack, :swap]
           # stack: [addr_of_first_key, key (wrapped)]
+          commands << [:stack, :dup]
           commands.concat(SAVE_TMP_COMMANDS)
 
           # calc hash
@@ -1126,7 +1118,6 @@ module Akaza
         commands << [:stack, :dup]
         commands.concat WRAP_ARRAY_COMMANDS
         commands.concat SAVE_TMP_COMMANDS
-        commands << [:stack, :pop]
         # stack: [array_addr_1]
 
         # Save first addr
@@ -1345,6 +1336,7 @@ module Akaza
         # TODO: range check and realloc
         commands << [:stack, :swap]
         # stack: [target_addr, value]
+        commands << [:stack, :dup]
         commands.concat SAVE_TMP_COMMANDS
         commands << [:heap, :save]
         commands.concat LOAD_TMP_COMMANDS
@@ -1437,6 +1429,7 @@ module Akaza
         commands << [:calc, :add]
         commands.concat ALLOCATE_NEW_HASH_ITEM_COMMANDS
         # stack: [value, key, addr_of_prev_key, allocated_addr_of_target_key]
+        commands << [:stack, :dup]
         commands.concat SAVE_TMP_COMMANDS
         commands << [:heap, :save]
         commands.concat LOAD_TMP_COMMANDS
@@ -1451,6 +1444,7 @@ module Akaza
         # stack: [value, key, addr_of_target_key]
         commands << [:flow, :def, after_allocated_label]
         # Save key
+        commands << [:stack, :dup]
         commands.concat SAVE_TMP_COMMANDS # addr_of_target_key
         commands << [:stack, :swap]
         commands << [:heap, :save]
@@ -1460,11 +1454,13 @@ module Akaza
         commands << [:stack, :push, 1]
         commands << [:calc, :add]
         # stack: [value, addr_of_target_value]
+        commands << [:stack, :dup]
         commands.concat SAVE_TMP_COMMANDS # addr_of_target_value
         commands << [:stack, :swap]
         commands.concat LOAD_TMP_COMMANDS # addr_of_target_value
         # stack: [addr_of_target_value, value, addr_of_target_value]
         commands << [:stack, :swap]
+        commands << [:stack, :dup]
         commands.concat SAVE_TMP_COMMANDS # value
         commands << [:heap, :save]
         # stack: [addr_of_target_value]
