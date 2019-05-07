@@ -102,6 +102,17 @@ module Akaza
       [:stack, :swap],
       [:heap, :save],
     ].freeze
+    # Allocate N size heap and push nothing
+    # stack: [N]
+    # return stack: []
+    ALLOCATE_N_HEAP_COMMANDS = [
+      [:stack, :push, HEAP_COUNT_ADDR],
+      [:heap, :load],
+      [:calc, :add],
+      [:stack, :push, HEAP_COUNT_ADDR],
+      [:stack, :swap],
+      [:heap, :save],
+    ].freeze
     # Return an address that will be allocated by ALLOCATE_HEAP_COMMANDS
     NEXT_HEAP_ADDRESS = [
       [:stack, :push, HEAP_COUNT_ADDR],
@@ -897,6 +908,7 @@ module Akaza
           commands << [:stack, :dup]
           commands << [:heap, :load]
           # stack: [addr_of_first_addr, cap_addr, cap]
+
           commands << [:stack, :push, 2]
           commands << [:calc, :multi]
           # stack: [addr_of_first_addr, cap_addr, new_cap]
@@ -908,14 +920,7 @@ module Akaza
           # stack: [addr_of_first_addr, new_cap]
           commands.concat NEXT_HEAP_ADDRESS
           commands.concat SAVE_TMP_COMMANDS # new_item_addr
-          # Allocate new addresses
-          commands.concat(times do
-            c = []
-            c.concat ALLOCATE_HEAP_COMMANDS
-            c << [:stack, :pop]
-            c
-          end)
-          commands << [:stack, :pop]
+          commands.concat ALLOCATE_N_HEAP_COMMANDS
           # stack: [addr_of_first_addr]
           commands << [:stack, :dup]
           commands << [:heap, :load]
@@ -1193,11 +1198,8 @@ module Akaza
         commands << [:stack, :push, cap]
         commands << [:heap, :save]
 
-        # Allocate body
-        cap.times do
-          commands.concat ALLOCATE_HEAP_COMMANDS
-          commands << [:stack, :pop]
-        end
+        commands << [:stack, :push, cap]
+        commands.concat ALLOCATE_N_HEAP_COMMANDS
 
         commands.concat LOAD_TMP_COMMANDS
         # stack: [array]
