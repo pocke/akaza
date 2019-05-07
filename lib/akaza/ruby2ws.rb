@@ -751,6 +751,7 @@ module Akaza
           end
         end
 
+        commands << [:stack, :pop] # pop cond object
         if else_node
           commands.concat compile_expr(else_node)
         else
@@ -760,6 +761,7 @@ module Akaza
 
         bodies.zip(body_labels).each do |body, label|
           commands << [:flow, :def, label]
+          commands << [:stack, :pop] # pop cond object
           commands.concat compile_expr(body)
           commands << [:flow, :jump, end_label]
         end
