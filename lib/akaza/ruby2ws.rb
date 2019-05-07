@@ -731,6 +731,7 @@ module Akaza
 
         bodies = []
         body_labels = []
+        else_node = nil
 
         first_when.each_when do |when_node|
           case when_node
@@ -745,10 +746,16 @@ module Akaza
               commands << [:calc, :sub]
               commands << [:flow, :jump_if_zero, body_labels.last]
             end
+          else # When case-else body
+            else_node = when_node
           end
         end
 
-        commands << [:stack, :push, NIL]
+        if else_node
+          commands.concat compile_expr(else_node)
+        else
+          commands << [:stack, :push, NIL]
+        end
         commands << [:flow, :jump, end_label]
 
         bodies.zip(body_labels).each do |body, label|
