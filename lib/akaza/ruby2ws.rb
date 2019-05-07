@@ -791,6 +791,11 @@ module Akaza
         end
 
         case cond
+        in [:TRUE] # Optimized
+          commands << [:flow, :def, cond_label]
+          commands.concat compile_expr(body)
+          commands << [:stack, :pop]
+          commands << [:flow, :jump, cond_label]
         in [:OPCALL, [:LIT, 0], :==, [:ARRAY, x, nil]]
           make_body.(x, :jump_if_zero)
         in [:OPCALL, x, :==, [:ARRAY, [:LIT, 0], nil]]
