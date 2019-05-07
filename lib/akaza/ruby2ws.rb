@@ -318,6 +318,8 @@ module Akaza
           commands.concat(compile_if(cond, if_body, else_body))
         in [:UNLESS, cond, else_body, if_body]
           commands.concat(compile_if(cond, if_body, else_body))
+        in [:CASE, cond, first_when]
+          commands.concat compile_case(cond, first_when)
         in [:WHILE, cond, body]
           commands.concat(compile_while(cond, body))
         in [:LIT, num]
@@ -717,6 +719,45 @@ module Akaza
           commands << [:flow, :def, end_label]
         end
 
+        commands
+      end
+
+      private def compile_case(cond, first_when)
+        commands = []
+        end_label = ident_to_label(nil)
+
+        commands.concat compile_expr(cond)
+        commands.concat UNWRAP_COMMANDS
+
+        bodies = []
+        body_labels = []
+
+        first_when.each_when do |when_node|
+          case when_node
+          in [:WHEN, [:ARRAY, *objs, nil], body, _]
+            bodies << body
+            body_labels << ident_to_label(nil)
+
+            objs.each do |obj|
+              commands << [:stack, :dup]
+              commands.concat compile_expr(obj)
+              commands.concat UNWRAP_COMMANDS
+              commands << [:calc, :sub]
+              commands << [:flow, :jump_if_zero, body_labels.last]
+            end
+          end
+        end
+
+        commands << [:stack, :push, NIL]
+        commands << [:flow, :jump, end_label]
+
+        bodies.zip(body_labels).each do |body, label|
+          commands << [:flow, :def, label]
+          commands.concat compile_expr(body)
+          commands << [:flow, :jump, end_label]
+        end
+
+        commands << [:flow, :def, end_label]
         commands
       end
 

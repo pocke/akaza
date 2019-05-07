@@ -33,6 +33,14 @@ module Akaza
         children[1]
       end
 
+      # :WHEN ext
+
+      def each_when(&block)
+        block.call(self)
+        next_when = self.children[2]
+        next_when&.each_when(&block)
+      end
+
       def first_index(path)
         return first_column if first_lineno == 1
 

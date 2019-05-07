@@ -288,6 +288,70 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_case
+    assert_eval "42", <<~RUBY
+      x = 1
+      case x
+      when 2
+        put_as_number 44
+      when 1
+        put_as_number 42
+      end
+    RUBY
+  end
+
+  def test_transpile_case2
+    assert_eval "42", <<~RUBY
+      x = 1
+      case x
+      when 2, 3
+        put_as_number 44
+      when 5, 4, 1
+        put_as_number 42
+      end
+    RUBY
+  end
+
+  def test_transpile_case2
+    assert_eval "42", <<~RUBY
+      x = 1
+      case x
+      when 1
+        put_as_number 42
+      when 5, 4, 1
+        put_as_number 44
+      end
+    RUBY
+  end
+
+  def test_transpile_case_retval
+    assert_eval "42", <<~RUBY
+      x = 1
+      v =
+        case x
+        when 1
+          42
+        when 5, 4, 1
+          100
+        end
+      put_as_number v
+    RUBY
+  end
+
+  def test_transpile_case_retval2
+    assert_eval "42", <<~RUBY
+      x = 1
+      v =
+        case x
+        when 100
+          444
+        when 5, 4, 1000
+          100
+        end
+      put_as_number 42 if v == nil
+    RUBY
+  end
+
   def test_transpile_eqeq
     assert_eval "ft", <<~RUBY
       def check(x, y)
