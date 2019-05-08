@@ -1066,6 +1066,14 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_p
+    assert_eval "[1, 2, 3],[1, [2, 3]]", <<~RUBY
+      p [1, 2, 3]
+      put_as_char ","
+      p [1, [2, 3]]
+    RUBY
+  end
+
   def assert_eval(expected_output, code, input = StringIO.new(''))
     ws = Akaza::Ruby2ws.ruby_to_ws(code)
     out = StringIO.new
