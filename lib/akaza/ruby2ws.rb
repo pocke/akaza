@@ -59,6 +59,12 @@ module Akaza
     # NIL is nil
     NIL = 4 << TYPE_BITS + TYPE_SPECIAL
 
+    # Classes
+    CLASS_SPECIAL = (8 + TYPE_SPECIAL) << TYPE_BITS + TYPE_SPECIAL
+    CLASS_INT = (8 + TYPE_INT) << TYPE_BITS + TYPE_SPECIAL
+    CLASS_ARRAY = (8 + TYPE_ARRAY) << TYPE_BITS + TYPE_SPECIAL
+    CLASS_HASH = (8 + TYPE_HASH) << TYPE_BITS + TYPE_SPECIAL
+
     # Call when stack top is the target number.
     UNWRAP_COMMANDS = [
       [:stack, :push, 2 ** TYPE_BITS],
@@ -318,6 +324,27 @@ module Akaza
           commands << [:stack, :push, variable_name_to_addr(:self)]
           commands << [:heap, :load]
           commands.concat compile_call_with_recv(name, args, error_target_node: node, explicit_self: false)
+        in [:CALL, recv, :is_a?, [:ARRAY, klass, nil]]
+          true_label = ident_to_label(nil)
+          end_label = ident_to_label(nil)
+          commands.concat compile_expr(recv)
+          commands.concat compile_expr(klass)
+          # klass to type
+          commands.concat UNWRAP_COMMANDS
+          commands << [:stack, :push, 8]
+          commands << [:calc, :sub]
+
+          commands << [:stack, :swap]
+          commands << [:flow, :call, is_a_label]
+          commands << [:flow, :jump_if_zero, true_label]
+
+          commands << [:stack, :push, FALSE]
+          commands << [:flow, :jump, end_label]
+
+          commands << [:flow, :def, true_label]
+          commands << [:stack, :push, TRUE]
+
+          commands << [:flow, :def, end_label]
         in [:CALL, recv, name, [:ARRAY, *args, nil]]
           commands.concat compile_expr(recv)
           commands.concat compile_call_with_recv(name, args, error_target_node: recv, explicit_self: true)
@@ -347,6 +374,14 @@ module Akaza
         in [:LVAR, name]
           commands << [:stack, :push, variable_name_to_addr(name)]
           commands << [:heap, :load]
+        in [:CONST, :Integer | :Array | :Hash | :Special => klass]
+          k = {
+            Integer: CLASS_INT,
+            Array: CLASS_ARRAY,
+            Hash: CLASS_HASH,
+            Special: CLASS_SPECIAL,
+          }[klass]
+          commands << [:stack, :push, k]
         in [:CONST, name]
           commands << [:stack, :push, variable_name_to_addr(name)]
           commands << [:heap, :load]
@@ -1198,6 +1233,7 @@ module Akaza
         commands << [:stack, :push, cap]
         commands << [:heap, :save]
 
+        # Allocate cap size heaps
         commands << [:stack, :push, cap]
         commands.concat ALLOCATE_N_HEAP_COMMANDS
 

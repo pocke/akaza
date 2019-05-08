@@ -1052,6 +1052,20 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_is_a
+    assert_eval "111", <<~RUBY
+      x = []
+      put_as_number 1 if x.is_a?(Array)
+      put_as_number 999 if x.is_a?(Integer)
+      x = 1
+      put_as_number 1 if x.is_a?(Integer)
+      put_as_number 999 if x.is_a?(Hash)
+      x = {}
+      put_as_number 1 if x.is_a?(Hash)
+      put_as_number 999 if x.is_a?(Integer)
+    RUBY
+  end
+
   def assert_eval(expected_output, code, input = StringIO.new(''))
     ws = Akaza::Ruby2ws.ruby_to_ws(code)
     out = StringIO.new
