@@ -1074,6 +1074,35 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_hash_re_asgn
+    assert_eval '2357,2357', <<~RUBY
+      hash_size = 11
+      key1 = hash_size * 0 + 1
+      key2 = hash_size * 1 + 1
+      key3 = hash_size * 2 + 1
+      key4 = hash_size * 3 + 1
+
+      hash = {key1 => 2}
+      hash[key2] = 3
+      hash[key3] = 5
+      hash[key4] = 7
+
+      put_as_number hash[key1]
+      put_as_number hash[key2]
+      put_as_number hash[key3]
+      put_as_number hash[key4]
+
+      put_as_char ','
+
+      hash[key2] = 3
+
+      put_as_number hash[key1]
+      put_as_number hash[key2]
+      put_as_number hash[key3]
+      put_as_number hash[key4]
+    RUBY
+  end
+
   def assert_eval(expected_output, code, input = StringIO.new(''))
     ws = Akaza::Ruby2ws.ruby_to_ws(code)
     out = StringIO.new

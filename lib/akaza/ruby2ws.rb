@@ -1494,6 +1494,7 @@ module Akaza
         when_not_allocated_label = ident_to_label(nil)
         when_allocated_label = ident_to_label(nil)
         after_allocated_label = ident_to_label(nil)
+        fill_none_addr_label = ident_to_label(nil)
 
         commands = []
         commands << [:flow, :def, label]
@@ -1526,6 +1527,17 @@ module Akaza
         commands.concat SAVE_TMP_COMMANDS
         commands << [:heap, :save]
         commands.concat LOAD_TMP_COMMANDS
+        # stack: [value, key, allocated_addr_of_target_key]
+
+        # Fill NONE_ADDR to next
+        commands << [:flow, :def, fill_none_addr_label]
+        commands << [:stack, :dup]
+        commands << [:stack, :push, 2]
+        commands << [:calc, :add]
+        # stack: [value, key, allocated_addr_of_target_key, addr_of_next_key_addr]
+        commands << [:stack, :push, NONE_ADDR]
+        commands << [:heap, :save]
+        # stack: [value, key, allocated_addr_of_target_key]
         commands << [:flow, :jump, after_allocated_label]
 
         # When allocated
@@ -1533,6 +1545,12 @@ module Akaza
         # stack: [value, key, addr_of_prev_key, addr_of_target_key]
         commands << [:stack, :swap]
         commands << [:stack, :pop]
+        # stack: [value, key, addr_of_target_key]
+        commands << [:stack, :dup]
+        commands << [:heap, :load]
+        commands << [:stack, :push, NONE]
+        commands << [:calc, :sub]
+        commands << [:flow, :jump_if_zero, fill_none_addr_label]
 
         # stack: [value, key, addr_of_target_key]
         commands << [:flow, :def, after_allocated_label]
@@ -1557,12 +1575,7 @@ module Akaza
         commands.concat SAVE_TMP_COMMANDS # value
         commands << [:heap, :save]
         # stack: [addr_of_target_value]
-        # Save addr
-        commands << [:stack, :push, 1]
-        commands << [:calc, :add]
-        # stack: [addr_of_next_key_addr]
-        commands << [:stack, :push, NONE_ADDR]
-        commands << [:heap, :save]
+        commands << [:stack, :pop] # TODO: optimize
 
         commands.concat LOAD_TMP_COMMANDS # value
         commands << [:flow, :end]
