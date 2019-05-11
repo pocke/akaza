@@ -29,34 +29,28 @@ module Akaza
         in [:stack, :pop]
           @stack.pop
         in [:calc, :add]
-          r = @stack.pop
-          l = @stack.pop
-          @stack.push l + r
+          @stack[-2] = @stack[-2] + @stack[-1]
+          @stack.pop
         in [:calc, :sub]
-          r = @stack.pop
-          l = @stack.pop
-          @stack.push l - r
+          @stack[-2] = @stack[-2] - @stack[-1]
+          @stack.pop
         in [:calc, :multi]
-          r = @stack.pop
-          l = @stack.pop
-          @stack.push l * r
+          @stack[-2] = @stack[-2] * @stack[-1]
+          @stack.pop
         in [:calc, :div]
-          r = @stack.pop
-          l = @stack.pop
-          @stack.push l / r
+          @stack[-2] = @stack[-2] / @stack[-1]
+          @stack.pop
         in [:calc, :mod]
-          r = @stack.pop
-          l = @stack.pop
-          @stack.push l % r
+          @stack[-2] = @stack[-2] % @stack[-1]
+          @stack.pop
         in [:heap, :save]
           val = @stack.pop
           addr = @stack.pop
           @heap[addr] = val
         in [:heap, :load]
-          addr = @stack.pop
-          val = @heap[addr]
+          val = @heap[@stack[-1]]
           raise "Heap #{addr} is not initialized" unless val
-          @stack.push val
+          @stack[-1] = val
         in [:flow, :def, label]
           # skip
         in [:flow, :call, label]
