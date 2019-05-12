@@ -352,6 +352,22 @@ class Ruby2wsTest < Minitest::Test
     RUBY
   end
 
+  def test_transpile_case_retval3
+    assert_eval "42", <<~RUBY
+      x = 1
+      y = 2
+      put_as_number(case x
+      when 1
+        case y
+        when 1
+          nil
+        when 2
+          42
+        end
+      end)
+    RUBY
+  end
+
   def test_transpile_case_else
     assert_eval "42", <<~RUBY
       x = 42
