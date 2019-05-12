@@ -1564,19 +1564,12 @@ module Akaza
         commands << [:stack, :push, 1]
         commands << [:calc, :add]
         # stack: [value, addr_of_target_value]
-        commands << [:stack, :dup]
-        commands.concat SAVE_TMP_COMMANDS # addr_of_target_value
-        commands << [:stack, :swap]
-        commands.concat LOAD_TMP_COMMANDS # addr_of_target_value
-        # stack: [addr_of_target_value, value, addr_of_target_value]
         commands << [:stack, :swap]
         commands << [:stack, :dup]
-        commands.concat SAVE_TMP_COMMANDS # value
+        commands.concat SAVE_TMP_COMMANDS
         commands << [:heap, :save]
-        # stack: [addr_of_target_value]
-        commands << [:stack, :pop] # TODO: optimize
+        commands.concat LOAD_TMP_COMMANDS
 
-        commands.concat LOAD_TMP_COMMANDS # value
         commands << [:flow, :end]
         @methods << commands
       end
