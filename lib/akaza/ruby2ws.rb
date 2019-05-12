@@ -280,8 +280,9 @@ module Akaza
           m = [
             [:flow, :def, label],
           ]
-          m.concat update_lvar_commands(lvar_table)
-          lvar_table[0...args_count].reverse.each do |args_name|
+          args = lvar_table[0...args_count].reverse
+          m.concat update_lvar_commands(lvar_table, args: args)
+          args.each do |args_name|
             addr = variable_name_to_addr(args_name)
             m << [:stack, :push, addr]
             m << [:stack, :swap]
@@ -1667,18 +1668,18 @@ module Akaza
         @lvars_stack.last
       end
 
-      # OPTIMIZE: avoid save NIL for args
-      private def update_lvar_commands(table)
-        addr_table = table.map do |v|
-          variable_name_to_addr(v)
+      private def update_lvar_commands(table, args: [])
+        addr_table = table.map do |var_name|
+          [var_name, variable_name_to_addr(var_name)]
         end
         commands = []
-        addr_table.each do |addr|
+        addr_table.each do |var_name, addr|
+          next if args.include?(var_name)
           commands << [:stack, :push, addr]
           commands << [:stack, :push, NIL]
           commands << [:heap, :save]
         end
-        @lvars_stack << addr_table.dup
+        @lvars_stack << addr_table.map{@2}
         lvars << variable_name_to_addr(:self)
         commands
       end
