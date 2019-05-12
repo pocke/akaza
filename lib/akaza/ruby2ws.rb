@@ -773,7 +773,6 @@ module Akaza
         end_label = ident_to_label(nil)
 
         commands.concat compile_expr(cond)
-        commands.concat UNWRAP_COMMANDS
 
         bodies = []
         body_labels = []
@@ -788,7 +787,6 @@ module Akaza
             objs.each do |obj|
               commands << [:stack, :dup]
               commands.concat compile_expr(obj)
-              commands.concat UNWRAP_COMMANDS
               commands << [:calc, :sub]
               commands << [:flow, :jump_if_zero, body_labels.last]
             end
