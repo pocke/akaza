@@ -30,6 +30,8 @@ module Akaza
   #   x = 10
   #   push x
   module Ruby2ws
+    MethodDefinition = Struct.new(:name, :lvar_table, :args_count, :body, :klass, keyword_init: true)
+
     using AstExt
 
     SPACE = ' '
@@ -159,13 +161,22 @@ module Akaza
         @label_index = 0
         @labels = {}
 
+        # Method list to compile
         # Array<Array<Command>>
         @methods = []
+
+        # For lazy compiling method.
+        # MethodDefinition is inserted to it on :DEFN node.
+        # The definition is compiled on call node, such as :CALL.
+        # Hash{Symbol => Array<MethodDefinition>}
+        @method_definitions = {}
+
         @method_table = {
           Array: [:size, :push, :pop, :[], :[]=],
           Integer: [:<=>],
           Hash: [:[], :[]=],
         }
+
         @lvars_stack = []
 
         @current_class = nil
@@ -276,7 +287,13 @@ module Akaza
           commands.concat compile_expr(recv)
           commands.concat compile_call_with_recv(:[]=, [index, value], error_target_node: node, explicit_self: true)
         in [:DEFN, name, [:SCOPE, lvar_table, [:ARGS, args_count ,*_], body]]
-          compile_def(name, lvar_table, args_count, body, @current_class)
+          (@method_definitions[name] ||= []) << MethodDefinition.new(
+            name: name,
+            lvar_table: lvar_table,
+            args_count: args_count,
+            body: body,
+            klass: @current_class
+          )
           commands << [:stack, :push, NIL] # def foo... returns nil
         in [:CLASS, [:COLON2, nil, class_name], nil, scope]
           raise ParseError, "Class cannot be nested, but #{@current_class}::#{class_name} is nested." if @current_class
@@ -585,6 +602,8 @@ module Akaza
       # Compile CALL
       # stack: [recv]
       private def compile_call_with_recv(name, args, error_target_node:, explicit_self:)
+        lazy_compile_method(name)
+
         commands = []
 
         is_int_label = ident_to_label(nil)
@@ -1679,6 +1698,12 @@ module Akaza
         @lvars_stack << addr_table.map{@2}
         lvars << variable_name_to_addr(:self)
         commands
+      end
+
+      private def lazy_compile_method(name)
+        @method_definitions.delete(name)&.each do |d|
+          compile_def(d.name, d.lvar_table, d.args_count, d.body, d.klass)
+        end
       end
     end
   end
