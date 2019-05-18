@@ -359,7 +359,7 @@ module Akaza
           commands.concat(compile_if(cond, if_body, else_body))
         in [:CASE, cond, first_when]
           commands.concat compile_case(cond, first_when)
-        in [:WHILE, cond, body]
+        in [:WHILE, cond, body, true]
           commands.concat(compile_while(cond, body))
         in [:LIT, num]
           commands << [:stack, :push, with_type(num, TYPE_INT)]
