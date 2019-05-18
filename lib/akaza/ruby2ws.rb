@@ -276,26 +276,7 @@ module Akaza
           commands.concat compile_expr(recv)
           commands.concat compile_call_with_recv(:[]=, [index, value], error_target_node: node, explicit_self: true)
         in [:DEFN, name, [:SCOPE, lvar_table, [:ARGS, args_count ,*_], body]]
-          label = @current_class ? ident_to_label(:"#{@current_class}##{name}") : ident_to_label(name)
-          m = [
-            [:flow, :def, label],
-          ]
-          args = lvar_table[0...args_count].reverse
-          m.concat update_lvar_commands(lvar_table, args: args)
-          args.each do |args_name|
-            addr = variable_name_to_addr(args_name)
-            m << [:stack, :push, addr]
-            m << [:stack, :swap]
-            m << [:heap, :save]
-          end
-
-          m.concat(compile_expr(body))
-          @lvars_stack.pop
-          m << [:flow, :end]
-
-          @methods << m
-
-          @method_table[@current_class] << name if @current_class
+          compile_def(name, lvar_table, args_count, body, @current_class)
           commands << [:stack, :push, NIL] # def foo... returns nil
         in [:CLASS, [:COLON2, nil, class_name], nil, scope]
           raise ParseError, "Class cannot be nested, but #{@current_class}::#{class_name} is nested." if @current_class
@@ -880,6 +861,29 @@ module Akaza
         commands << [:flow, :exit]
 
         commands
+      end
+
+      private def compile_def(name, lvar_table, args_count, body, klass)
+        label = klass ? ident_to_label(:"#{klass}##{name}") : ident_to_label(name)
+        m = [
+          [:flow, :def, label],
+        ]
+        args = lvar_table[0...args_count].reverse
+        m.concat update_lvar_commands(lvar_table, args: args)
+        args.each do |args_name|
+          addr = variable_name_to_addr(args_name)
+          m << [:stack, :push, addr]
+          m << [:stack, :swap]
+          m << [:heap, :save]
+        end
+
+        m.concat(compile_expr(body))
+        @lvars_stack.pop
+        m << [:flow, :end]
+
+        @methods << m
+
+        @method_table[klass] << name if klass
       end
 
       private def initialize_hash
