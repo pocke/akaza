@@ -163,7 +163,7 @@ module Akaza
         @methods = []
         @method_table = {
           Array: [:size, :push, :pop, :[], :[]=],
-          Integer: [],
+          Integer: [:<=>],
           Hash: [:[], :[]=],
         }
         @lvars_stack = []
