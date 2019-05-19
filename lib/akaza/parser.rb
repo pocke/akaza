@@ -43,15 +43,15 @@ module Akaza
     private def parse_stack
       case ch = nextc
       when SPACE
-        [:stack, :push, nextint]
+        [:stack_push, nextint]
       else
         case c = [ch, nextc]
         when [NL, SPACE]
-          [:stack, :dup]
+          [:stack_dup]
         when [NL, TAB]
-          [:stack, :swap]
+          [:stack_swap]
         when [NL, NL]
-          [:stack, :pop]
+          [:stack_pop]
         else
           raise "unreachable: #{c}"
         end
@@ -61,19 +61,19 @@ module Akaza
     private def parse_flow
       case c = [nextc, nextc]
       when [SPACE, SPACE]
-        [:flow, :def, nextlabel]
+        [:flow_def, nextlabel]
       when [SPACE, TAB]
-        [:flow, :call, nextlabel]
+        [:flow_call, nextlabel]
       when [SPACE, NL]
-        [:flow, :jump, nextlabel]
+        [:flow_jump, nextlabel]
       when [TAB, SPACE]
-        [:flow, :jump_if_zero, nextlabel]
+        [:flow_jump_if_zero, nextlabel]
       when [TAB, TAB]
-        [:flow, :jump_if_neg, nextlabel]
+        [:flow_jump_if_neg, nextlabel]
       when [TAB, NL]
-        [:flow, :end]
+        [:flow_end]
       when [NL, NL]
-        [:flow, :exit]
+        [:flow_exit]
       else
         raise "unreachable: #{c}"
       end
@@ -82,15 +82,15 @@ module Akaza
     private def parse_calc
       case c = [nextc, nextc]
       when [SPACE, SPACE]
-        [:calc, :add]
+        [:calc_add]
       when [SPACE, TAB]
-        [:calc, :sub]
+        [:calc_sub]
       when [SPACE, NL]
-        [:calc, :multi]
+        [:calc_multi]
       when [TAB, SPACE]
-        [:calc, :div]
+        [:calc_div]
       when [TAB, TAB]
-        [:calc, :mod]
+        [:calc_mod]
       else
         raise "unreachable: #{c}"
       end
@@ -99,9 +99,9 @@ module Akaza
     private def parse_heap
       case c = nextc
       when SPACE
-        [:heap, :save]
+        [:heap_save]
       when TAB
-        [:heap, :load]
+        [:heap_load]
       else
         raise "unreachable: #{c}"
       end
@@ -110,13 +110,13 @@ module Akaza
     private def parse_io
       case c = [nextc, nextc]
       when [SPACE, SPACE]
-        [:io, :write_char]
+        [:io_write_char]
       when [SPACE, TAB]
-        [:io, :write_num]
+        [:io_write_num]
       when [TAB, SPACE]
-        [:io, :read_char]
+        [:io_read_char]
       when [TAB, TAB]
-        [:io, :read_num]
+        [:io_read_num]
       else
         raise "unreachable: #{c}"
       end
