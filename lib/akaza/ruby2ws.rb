@@ -41,6 +41,8 @@ module Akaza
     NONE_ADDR = 0
     TMP_ADDR = 1
     HEAP_COUNT_ADDR = 2
+    LVAR_TABLE_ADDR = 3
+    LVAR_TABLE_SIZE_ADDR = 4
 
     TYPES = %w[Integer Hash Array]
     TYPE_BITS = 2
@@ -53,6 +55,8 @@ module Akaza
     HASH_SIZE = 11
 
     ARRAY_FIRST_CAPACITY = 10
+
+    FIRST_UNRESERVED_ADDR = LVAR_TABLE_ADDR + 2 + ARRAY_FIRST_CAPACITY + 1
 
     FALSE = 0 << TYPE_BITS + TYPE_SPECIAL
     # NONE is for internal. It does not available for user.
@@ -155,7 +159,7 @@ module Akaza
         @ruby_code = ruby_code
         @path = path
 
-        @variable_addr_index = 2
+        @variable_addr_index = FIRST_UNRESERVED_ADDR # TODO: remove me
         @variable_addrs = {}
 
         @label_index = 0
@@ -184,6 +188,14 @@ module Akaza
 
       def transpile
         commands = []
+        # Reserved heaps.
+        commands << [:stack_push, HEAP_COUNT_ADDR]
+        commands << [:stack_push, HEAP_COUNT_ADDR]
+        commands << [:heap_save]
+        # Allocate array for local variables to LVAR_TABLE_ADDR.
+        commands.concat allocate_array_commands(0)
+        commands << [:stack_pop]
+
         # define built-in functions
         define_array_size
         define_array_pop
@@ -302,6 +314,7 @@ module Akaza
           @current_class = nil
         in [:SCOPE, lvar_table, _, body]
           commands.concat update_lvar_commands(lvar_table)
+          commands.concat allocate_lvars_commands
           commands.concat(compile_expr(body))
           @lvars_stack.pop
         in [:BEGIN, nil]
@@ -1719,6 +1732,17 @@ module Akaza
         end
         @lvars_stack << addr_table.map{@2}
         lvars << variable_name_to_addr(:self)
+        commands
+      end
+
+      private def allocate_lvars_commands
+        commands = []
+        lvars.each do
+          commands << [:stack_push, LVAR_TABLE_SIZE_ADDR]
+          commands << [:stack_push, NIL]
+          commands << [:stack_push, LVAR_TABLE_ADDR]
+          commands << [:flow_call, array_push_body_label]
+        end
         commands
       end
 
