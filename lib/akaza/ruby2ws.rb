@@ -69,74 +69,74 @@ module Akaza
 
     # Call when stack top is the target number.
     UNWRAP_COMMANDS = [
-      [:stack, :push, 2 ** TYPE_BITS],
-      [:calc, :div],
+      [:stack_push, 2 ** TYPE_BITS],
+      [:calc_div],
     ].freeze
     WRAP_NUMBER_COMMANDS = [
-      [:stack, :push, 2 ** TYPE_BITS],
-      [:calc, :multi],
-      [:stack, :push, TYPE_INT],
-      [:calc, :add],
+      [:stack_push, 2 ** TYPE_BITS],
+      [:calc_multi],
+      [:stack_push, TYPE_INT],
+      [:calc_add],
     ].freeze
     WRAP_ARRAY_COMMANDS = [
-      [:stack, :push, 2 ** TYPE_BITS],
-      [:calc, :multi],
-      [:stack, :push, TYPE_ARRAY],
-      [:calc, :add],
+      [:stack_push, 2 ** TYPE_BITS],
+      [:calc_multi],
+      [:stack_push, TYPE_ARRAY],
+      [:calc_add],
     ].freeze
     WRAP_HASH_COMMANDS = [
-      [:stack, :push, 2 ** TYPE_BITS],
-      [:calc, :multi],
-      [:stack, :push, TYPE_HASH],
-      [:calc, :add],
+      [:stack_push, 2 ** TYPE_BITS],
+      [:calc_multi],
+      [:stack_push, TYPE_HASH],
+      [:calc_add],
     ].freeze
     SAVE_TMP_COMMANDS = [
-      [:stack, :push, TMP_ADDR],
-      [:stack, :swap],
-      [:heap, :save],
+      [:stack_push, TMP_ADDR],
+      [:stack_swap],
+      [:heap_save],
     ].freeze
     LOAD_TMP_COMMANDS = [
-      [:stack, :push, TMP_ADDR],
-      [:heap, :load],
+      [:stack_push, TMP_ADDR],
+      [:heap_load],
     ].freeze
     # Allocate heap and push allocated address to the stack
     ALLOCATE_HEAP_COMMANDS = [
-      [:stack, :push, HEAP_COUNT_ADDR],
-      [:heap, :load],
-      [:stack, :push, 1],
-      [:calc, :add],
-      [:stack, :dup],
-      [:stack, :push, HEAP_COUNT_ADDR],
-      [:stack, :swap],
-      [:heap, :save],
+      [:stack_push, HEAP_COUNT_ADDR],
+      [:heap_load],
+      [:stack_push, 1],
+      [:calc_add],
+      [:stack_dup],
+      [:stack_push, HEAP_COUNT_ADDR],
+      [:stack_swap],
+      [:heap_save],
     ].freeze
     # Allocate N size heap and push nothing
     # stack: [N]
     # return stack: []
     ALLOCATE_N_HEAP_COMMANDS = [
-      [:stack, :push, HEAP_COUNT_ADDR],
-      [:heap, :load],
-      [:calc, :add],
-      [:stack, :push, HEAP_COUNT_ADDR],
-      [:stack, :swap],
-      [:heap, :save],
+      [:stack_push, HEAP_COUNT_ADDR],
+      [:heap_load],
+      [:calc_add],
+      [:stack_push, HEAP_COUNT_ADDR],
+      [:stack_swap],
+      [:heap_save],
     ].freeze
     # Return an address that will be allocated by ALLOCATE_HEAP_COMMANDS
     NEXT_HEAP_ADDRESS = [
-      [:stack, :push, HEAP_COUNT_ADDR],
-      [:heap, :load],
-      [:stack, :push, 1],
-      [:calc, :add],
+      [:stack_push, HEAP_COUNT_ADDR],
+      [:heap_load],
+      [:stack_push, 1],
+      [:calc_add],
     ].freeze
     ALLOCATE_NEW_HASH_ITEM_COMMANDS = [
       *ALLOCATE_HEAP_COMMANDS,
-      [:stack, :dup],
-      [:stack, :push, NONE],
-      [:heap, :save],
+      [:stack_dup],
+      [:stack_push, NONE],
+      [:heap_save],
       *ALLOCATE_HEAP_COMMANDS,
-      [:stack, :pop],
+      [:stack_pop],
       *ALLOCATE_HEAP_COMMANDS,
-      [:stack, :pop],
+      [:stack_pop],
     ].freeze
 
     prelude_path = File.expand_path('./ruby2ws/prelude.rb', __dir__)
@@ -201,17 +201,17 @@ module Akaza
         body = compile_expr(ast)
 
         # Save self for top level
-        commands << [:stack, :push, variable_name_to_addr(:self)]
-        commands << [:stack, :push, NONE]
-        commands << [:heap, :save]
+        commands << [:stack_push, variable_name_to_addr(:self)]
+        commands << [:stack_push, NONE]
+        commands << [:heap_save]
 
         # Reserve heaps for local variables
-        commands << [:stack, :push, HEAP_COUNT_ADDR]
-        commands << [:stack, :push, @variable_addr_index + 1]
-        commands << [:heap, :save]
+        commands << [:stack_push, HEAP_COUNT_ADDR]
+        commands << [:stack_push, @variable_addr_index + 1]
+        commands << [:heap_save]
 
         commands.concat body
-        commands << [:flow, :exit]
+        commands << [:flow_exit]
         commands.concat(*@methods)
         commands_to_ws(commands)
       end
@@ -223,66 +223,66 @@ module Akaza
         in [:FCALL, :put_as_number, [:ARRAY, arg, nil]]
           commands.concat(compile_expr(arg))
           commands.concat(UNWRAP_COMMANDS)
-          commands << [:io, :write_num]
-          commands << [:stack, :push, NIL]
+          commands << [:io_write_num]
+          commands << [:stack_push, NIL]
         in [:FCALL, :put_as_char, [:ARRAY, arg, nil]]
           commands.concat(compile_expr(arg))
           commands.concat(UNWRAP_COMMANDS)
-          commands << [:io, :write_char]
-          commands << [:stack, :push, NIL]
+          commands << [:io_write_char]
+          commands << [:stack_push, NIL]
         in [:FCALL, :raise, [:ARRAY, [:STR, str], nil]]
           commands.concat compile_raise(str, node)
         in [:VCALL, :get_as_number]
-          commands << [:stack, :push, TMP_ADDR]
-          commands << [:io, :read_num]
-          commands << [:stack, :push, TMP_ADDR]
-          commands << [:heap, :load]
+          commands << [:stack_push, TMP_ADDR]
+          commands << [:io_read_num]
+          commands << [:stack_push, TMP_ADDR]
+          commands << [:heap_load]
           commands.concat(WRAP_NUMBER_COMMANDS)
         in [:VCALL, :get_as_char]
-          commands << [:stack, :push, TMP_ADDR]
-          commands << [:io, :read_char]
-          commands << [:stack, :push, TMP_ADDR]
-          commands << [:heap, :load]
+          commands << [:stack_push, TMP_ADDR]
+          commands << [:io_read_char]
+          commands << [:stack_push, TMP_ADDR]
+          commands << [:heap_load]
           commands.concat(WRAP_NUMBER_COMMANDS)
         in [:OPCALL, l, :==, [:ARRAY, r, nil]]
           commands.concat compile_expr(l)
           commands.concat compile_expr(r)
-          commands << [:flow, :call, op_eqeq_label]
+          commands << [:flow_call, op_eqeq_label]
         in [:OPCALL, l, :!=, [:ARRAY, r, nil]]
           commands.concat compile_expr(l)
           commands.concat compile_expr(r)
-          commands << [:flow, :call, op_eqeq_label]
-          commands << [:flow, :call, op_not_label]
+          commands << [:flow_call, op_eqeq_label]
+          commands << [:flow_call, op_not_label]
         in [:OPCALL, recv, :!, nil]
           commands.concat compile_expr(recv)
-          commands << [:flow, :call, op_not_label]
+          commands << [:flow_call, op_not_label]
         in [:OPCALL, l, :+ | :- | :* | :/ | :% => sym, [:ARRAY, r, nil]]
-          com = {'+': :add, '-': :sub, '*': :multi, '/': :div, '%': :mod}[sym]
+          com = {'+': :calc_add, '-': :calc_sub, '*': :calc_multi, '/': :calc_div, '%': :calc_mod}[sym]
           commands.concat(compile_expr(l))
           commands.concat(UNWRAP_COMMANDS)
           commands.concat(compile_expr(r))
           commands.concat(UNWRAP_COMMANDS)
-          commands << [:calc, com]
+          commands << [com]
           commands.concat(WRAP_NUMBER_COMMANDS)
         in [:OPCALL, recv, op, [:ARRAY, *args, nil]]
           commands.concat compile_expr(recv)
           commands.concat compile_call_with_recv(op, args, error_target_node: recv, explicit_self: true)
         in [:VCALL, :exit]
-          commands << [:flow, :exit]
+          commands << [:flow_exit]
         in [:LASGN, var, arg]
           commands.concat(compile_expr(arg))
-          commands << [:stack, :dup]
+          commands << [:stack_dup]
           var_addr = variable_name_to_addr(var)
-          commands << [:stack, :push, var_addr]
-          commands << [:stack, :swap]
-          commands << [:heap, :save]
+          commands << [:stack_push, var_addr]
+          commands << [:stack_swap]
+          commands << [:heap_save]
         in [:CDECL, var, arg]
           commands.concat(compile_expr(arg))
-          commands << [:stack, :dup]
+          commands << [:stack_dup]
           var_addr = variable_name_to_addr(var)
-          commands << [:stack, :push, var_addr]
-          commands << [:stack, :swap]
-          commands << [:heap, :save]
+          commands << [:stack_push, var_addr]
+          commands << [:stack_swap]
+          commands << [:heap_save]
         in [:ATTRASGN, recv, :[]=, [:ARRAY, index, value, nil]]
           commands.concat compile_expr(recv)
           commands.concat compile_call_with_recv(:[]=, [index, value], error_target_node: node, explicit_self: true)
@@ -294,7 +294,7 @@ module Akaza
             body: body,
             klass: @current_class
           )
-          commands << [:stack, :push, NIL] # def foo... returns nil
+          commands << [:stack_push, NIL] # def foo... returns nil
         in [:CLASS, [:COLON2, nil, class_name], nil, scope]
           raise ParseError, "Class cannot be nested, but #{@current_class}::#{class_name} is nested." if @current_class
           @current_class = class_name
@@ -307,21 +307,21 @@ module Akaza
         in [:BEGIN, nil]
           # skip
           # It is available in class definition.
-          commands << [:stack, :push, NIL]
+          commands << [:stack_push, NIL]
         in [:SELF]
           commands.concat load_from_self_commands
         in [:BLOCK, *children]
           children.each.with_index do |child, index|
             commands.concat(compile_expr(child))
-            commands << [:stack, :pop] unless index == children.size - 1
+            commands << [:stack_pop] unless index == children.size - 1
           end
         in [:VCALL, name]
-          commands << [:stack, :push, variable_name_to_addr(:self)]
-          commands << [:heap, :load]
+          commands << [:stack_push, variable_name_to_addr(:self)]
+          commands << [:heap_load]
           commands.concat compile_call_with_recv(name, [], error_target_node: node, explicit_self: false)
         in [:FCALL, name, [:ARRAY, *args, nil]]
-          commands << [:stack, :push, variable_name_to_addr(:self)]
-          commands << [:heap, :load]
+          commands << [:stack_push, variable_name_to_addr(:self)]
+          commands << [:heap_load]
           commands.concat compile_call_with_recv(name, args, error_target_node: node, explicit_self: false)
         in [:CALL, recv, :is_a?, [:ARRAY, klass, nil]]
           true_label = ident_to_label(nil)
@@ -330,20 +330,20 @@ module Akaza
           commands.concat compile_expr(klass)
           # klass to type
           commands.concat UNWRAP_COMMANDS
-          commands << [:stack, :push, 8]
-          commands << [:calc, :sub]
+          commands << [:stack_push, 8]
+          commands << [:calc_sub]
 
-          commands << [:stack, :swap]
-          commands << [:flow, :call, is_a_label]
-          commands << [:flow, :jump_if_zero, true_label]
+          commands << [:stack_swap]
+          commands << [:flow_call, is_a_label]
+          commands << [:flow_jump_if_zero, true_label]
 
-          commands << [:stack, :push, FALSE]
-          commands << [:flow, :jump, end_label]
+          commands << [:stack_push, FALSE]
+          commands << [:flow_jump, end_label]
 
-          commands << [:flow, :def, true_label]
-          commands << [:stack, :push, TRUE]
+          commands << [:flow_def, true_label]
+          commands << [:stack_push, TRUE]
 
-          commands << [:flow, :def, end_label]
+          commands << [:flow_def, end_label]
         in [:CALL, recv, name, [:ARRAY, *args, nil]]
           commands.concat compile_expr(recv)
           commands.concat compile_call_with_recv(name, args, error_target_node: recv, explicit_self: true)
@@ -360,19 +360,19 @@ module Akaza
         in [:WHILE, cond, body, true]
           commands.concat(compile_while(cond, body))
         in [:LIT, num]
-          commands << [:stack, :push, with_type(num, TYPE_INT)]
+          commands << [:stack_push, with_type(num, TYPE_INT)]
         in [:STR, str]
           check_char!(str)
-          commands << [:stack, :push, with_type(str.ord, TYPE_INT)]
+          commands << [:stack_push, with_type(str.ord, TYPE_INT)]
         in [:TRUE]
-          commands << [:stack, :push, TRUE]
+          commands << [:stack_push, TRUE]
         in [:FALSE]
-          commands << [:stack, :push, FALSE]
+          commands << [:stack_push, FALSE]
         in [:NIL]
-          commands << [:stack, :push, NIL]
+          commands << [:stack_push, NIL]
         in [:LVAR, name]
-          commands << [:stack, :push, variable_name_to_addr(name)]
-          commands << [:heap, :load]
+          commands << [:stack_push, variable_name_to_addr(name)]
+          commands << [:heap_load]
         in [:CONST, :Integer | :Array | :Hash | :Special => klass]
           k = {
             Integer: CLASS_INT,
@@ -380,30 +380,30 @@ module Akaza
             Hash: CLASS_HASH,
             Special: CLASS_SPECIAL,
           }[klass]
-          commands << [:stack, :push, k]
+          commands << [:stack_push, k]
         in [:CONST, name]
-          commands << [:stack, :push, variable_name_to_addr(name)]
-          commands << [:heap, :load]
+          commands << [:stack_push, variable_name_to_addr(name)]
+          commands << [:heap_load]
         in [:ARRAY, *items, nil]
           commands.concat allocate_array_commands(items.size)
           # stack: [array]
 
-          commands << [:stack, :dup]
+          commands << [:stack_dup]
           commands.concat UNWRAP_COMMANDS
-          commands << [:stack, :push, 3]
-          commands << [:calc, :add]
+          commands << [:stack_push, 3]
+          commands << [:calc_add]
           # stack: [array, first_item_addr]
 
           items.each do |item|
-            commands << [:stack, :dup]
+            commands << [:stack_dup]
             # stack: [array, item_addr, item_addr]
             commands.concat compile_expr(item)
-            commands << [:heap, :save]
-            commands << [:stack, :push, 1]
-            commands << [:calc, :add]
+            commands << [:heap_save]
+            commands << [:stack_push, 1]
+            commands << [:calc_add]
             # stack: [array, next_item_addr]
           end
-          commands << [:stack, :pop]
+          commands << [:stack_pop]
 
         in [:ZARRAY]
           # Allocate array ref
@@ -412,7 +412,7 @@ module Akaza
           commands.concat initialize_hash
         in [:HASH, [:ARRAY, *pairs, nil]]
           commands.concat initialize_hash
-          commands << [:stack, :dup]
+          commands << [:stack_dup]
           commands.concat UNWRAP_COMMANDS
           commands.concat SAVE_TMP_COMMANDS
           # stack: [hash_object (unwrapped)]
@@ -425,81 +425,81 @@ module Akaza
 
             commands.concat(compile_expr(key))
             # calc hash
-            commands << [:stack, :dup]
+            commands << [:stack_dup]
             commands.concat(UNWRAP_COMMANDS)
-            commands << [:stack, :push, HASH_SIZE]
-            commands << [:calc, :mod]
-            commands << [:stack, :push, 3]
-            commands << [:calc, :multi]
+            commands << [:stack_push, HASH_SIZE]
+            commands << [:calc_mod]
+            commands << [:stack_push, 3]
+            commands << [:calc_multi]
             # stack: [key, hash]
 
             commands.concat LOAD_TMP_COMMANDS
-            commands << [:stack, :push, 1]
-            commands << [:calc, :add] # hash_addr + 1 is the first item's address.
-            commands << [:calc, :add]
+            commands << [:stack_push, 1]
+            commands << [:calc_add] # hash_addr + 1 is the first item's address.
+            commands << [:calc_add]
             # stack: [key, key_addr]
 
             # Check collision
-            commands << [:flow, :def, check_collision_label]
-            commands << [:stack, :dup]
-            commands << [:heap, :load]
-            commands << [:stack, :push, NONE]
-            commands << [:calc, :sub]
+            commands << [:flow_def, check_collision_label]
+            commands << [:stack_dup]
+            commands << [:heap_load]
+            commands << [:stack_push, NONE]
+            commands << [:calc_sub]
             # stack: [key, key_addr, is_none]
 
-            commands << [:flow, :jump_if_zero, no_collision_label]
+            commands << [:flow_jump_if_zero, no_collision_label]
 
             # when collision
-            commands << [:stack, :push, 2]
-            commands << [:calc, :add]
+            commands << [:stack_push, 2]
+            commands << [:calc_add]
             # stack: [key, next_addr]
-            commands << [:stack, :dup]
-            commands << [:heap, :load]
-            commands << [:stack, :push, NONE_ADDR]
-            commands << [:calc, :sub]
-            commands << [:flow, :jump_if_zero, when_not_allocated]
+            commands << [:stack_dup]
+            commands << [:heap_load]
+            commands << [:stack_push, NONE_ADDR]
+            commands << [:calc_sub]
+            commands << [:flow_jump_if_zero, when_not_allocated]
             # stack: [key, next_addr]
 
             # when next field is already allocated
-            commands << [:heap, :load]
+            commands << [:heap_load]
             # stack: [key, next_key_addr]
-            commands << [:flow, :jump, check_collision_label]
+            commands << [:flow_jump, check_collision_label]
 
             # when next field is not allocated
-            commands << [:flow, :def, when_not_allocated]
+            commands << [:flow_def, when_not_allocated]
             # stack: [key, next_addr]
-            commands << [:stack, :dup]
+            commands << [:stack_dup]
             commands.concat ALLOCATE_NEW_HASH_ITEM_COMMANDS
-            commands << [:heap, :save]
-            commands << [:heap, :load]
+            commands << [:heap_save]
+            commands << [:heap_load]
 
-            commands << [:flow, :jump, check_collision_label]
+            commands << [:flow_jump, check_collision_label]
 
-            commands << [:flow, :def, no_collision_label]
+            commands << [:flow_def, no_collision_label]
             # End check collision
 
             # stack: [key, key_addr]
             # Save value
-            commands << [:stack, :dup]
-            commands << [:stack, :push, 1]
-            commands << [:calc, :add]
+            commands << [:stack_dup]
+            commands << [:stack_push, 1]
+            commands << [:calc_add]
             commands.concat(compile_expr(value))
             # stack: [key, key_addr, value_addr, value]
-            commands << [:heap, :save]
+            commands << [:heap_save]
             # stack: [key, key_addr]
 
             # Save next addr
-            commands << [:stack, :dup]
-            commands << [:stack, :push, 2]
-            commands << [:calc, :add]
+            commands << [:stack_dup]
+            commands << [:stack_push, 2]
+            commands << [:calc_add]
             # stack: [key, key_addr, next_addr]
-            commands << [:stack, :push, NONE_ADDR]
-            commands << [:heap, :save]
+            commands << [:stack_push, NONE_ADDR]
+            commands << [:heap_save]
             # stack: [key, key_addr]
 
             # Save key
-            commands << [:stack, :swap]
-            commands << [:heap, :save]
+            commands << [:stack_swap]
+            commands << [:heap_save]
           end
         end
 
@@ -510,49 +510,49 @@ module Akaza
         buf = +""
         commands.each do |command|
           case command
-          in [:stack, :push, num]
+          in [:stack_push, num]
             buf << SPACE << SPACE << num_to_ws(num)
-          in [:stack, :pop]
+          in [:stack_pop]
             buf << SPACE << NL << NL
-          in [:stack, :swap]
+          in [:stack_swap]
             buf << SPACE << NL << TAB
-          in [:stack, :dup]
+          in [:stack_dup]
             buf << SPACE << NL << SPACE
-          in [:heap, :save]
+          in [:heap_save]
             buf << TAB << TAB << SPACE
-          in [:heap, :load]
+          in [:heap_load]
             buf << TAB << TAB << TAB
-          in [:io, :write_char]
+          in [:io_write_char]
             buf << TAB << NL << SPACE << SPACE
-          in [:io, :write_num]
+          in [:io_write_num]
             buf << TAB << NL << SPACE << TAB
-          in [:io, :read_char]
+          in [:io_read_char]
             buf << TAB << NL << TAB << SPACE
-          in [:io, :read_num]
+          in [:io_read_num]
             buf << TAB << NL << TAB << TAB
-          in [:flow, :exit]
+          in [:flow_exit]
             buf << NL << NL << NL
-          in [:flow, :call, num]
+          in [:flow_call, num]
             buf << NL << SPACE << TAB << num_to_ws(num)
-          in [:flow, :def, num]
+          in [:flow_def, num]
             buf << NL << SPACE << SPACE << num_to_ws(num)
-          in [:flow, :end]
+          in [:flow_end]
             buf << NL << TAB << NL
-          in [:flow, :jump_if_zero, label]
+          in [:flow_jump_if_zero, label]
             buf << NL << TAB << SPACE << num_to_ws(label)
-          in [:flow, :jump, label]
+          in [:flow_jump, label]
             buf << NL << SPACE << NL << num_to_ws(label)
-          in [:flow, :jump_if_neg, label]
+          in [:flow_jump_if_neg, label]
             buf << NL << TAB << TAB << num_to_ws(label)
-          in [:calc, :add]
+          in [:calc_add]
             buf << TAB << SPACE << SPACE << SPACE
-          in [:calc, :sub]
+          in [:calc_sub]
             buf << TAB << SPACE << SPACE << TAB
-          in [:calc, :multi]
+          in [:calc_multi]
             buf << TAB << SPACE << SPACE << NL
-          in [:calc, :div]
+          in [:calc_div]
             buf << TAB << SPACE << TAB << SPACE
-          in [:calc, :mod]
+          in [:calc_mod]
             buf << TAB << SPACE << TAB << TAB
           end
         end
@@ -562,15 +562,15 @@ module Akaza
       private def with_storing_lvars(commands, &block)
         lvars.each do |var_addr|
           # stack.push(addr); stack.push(val)
-          commands << [:stack, :push, var_addr]
-          commands << [:stack, :push, var_addr]
-          commands << [:heap, :load]
+          commands << [:stack_push, var_addr]
+          commands << [:stack_push, var_addr]
+          commands << [:heap_load]
         end
 
         block.call
 
         lvars.size.times do
-          commands << [:heap, :save]
+          commands << [:heap_save]
         end
       end
 
@@ -590,14 +590,14 @@ module Akaza
           end
 
 
-          commands << [:flow, :call, ident_to_label(name)]
-          commands << [:stack, :push, TMP_ADDR]
-          commands << [:stack, :swap]
-          commands << [:heap, :save]
+          commands << [:flow_call, ident_to_label(name)]
+          commands << [:stack_push, TMP_ADDR]
+          commands << [:stack_swap]
+          commands << [:heap_save]
         end
         # restore return value
-        commands << [:stack, :push, TMP_ADDR]
-        commands << [:heap, :load]
+        commands << [:stack_push, TMP_ADDR]
+        commands << [:heap_load]
         commands
       end
 
@@ -614,74 +614,74 @@ module Akaza
         is_none_label = ident_to_label(nil)
         end_label = ident_to_label(nil)
 
-        commands << [:stack, :dup]
+        commands << [:stack_dup]
         commands.concat SAVE_TMP_COMMANDS
 
         # is_a?(Integer)
-        commands << [:stack, :push, TYPE_INT]
-        commands << [:stack, :swap]
-        commands << [:flow, :call, is_a_label]
-        commands << [:flow, :jump_if_zero, is_int_label]
+        commands << [:stack_push, TYPE_INT]
+        commands << [:stack_swap]
+        commands << [:flow_call, is_a_label]
+        commands << [:flow_jump_if_zero, is_int_label]
 
         # is_a?(Array)
-        commands << [:stack, :push, TYPE_ARRAY]
+        commands << [:stack_push, TYPE_ARRAY]
         commands.concat LOAD_TMP_COMMANDS
-        commands << [:flow, :call, is_a_label]
-        commands << [:flow, :jump_if_zero, is_array_label]
+        commands << [:flow_call, is_a_label]
+        commands << [:flow_jump_if_zero, is_array_label]
 
         # is_a?(Hash)
-        commands << [:stack, :push, TYPE_HASH]
+        commands << [:stack_push, TYPE_HASH]
         commands.concat LOAD_TMP_COMMANDS
-        commands << [:flow, :call, is_a_label]
-        commands << [:flow, :jump_if_zero, is_hash_label]
+        commands << [:flow_call, is_a_label]
+        commands << [:flow_jump_if_zero, is_hash_label]
 
         # == NONE
         commands.concat LOAD_TMP_COMMANDS
-        commands << [:stack, :push, NONE]
-        commands << [:calc, :sub]
-        commands << [:flow, :jump_if_zero, is_none_label]
+        commands << [:stack_push, NONE]
+        commands << [:calc_sub]
+        commands << [:flow_jump_if_zero, is_none_label]
 
         # Other
         commands.concat compile_raise("Unknown type of receiver", error_target_node)
 
         top_level_p = -> (type) { !@method_table[type].include?(name) && !explicit_self }
 
-        commands << [:flow, :def, is_int_label]
+        commands << [:flow_def, is_int_label]
         if top_level_p.(:Integer)
-          commands << [:stack, :push, NONE]
+          commands << [:stack_push, NONE]
           commands.concat compile_call(name, args)
         else
           commands.concat LOAD_TMP_COMMANDS
           commands.concat compile_call(:"Integer##{name}", args)
         end
-        commands << [:flow, :jump, end_label]
+        commands << [:flow_jump, end_label]
 
-        commands << [:flow, :def, is_array_label]
+        commands << [:flow_def, is_array_label]
         if top_level_p.(:Array)
-          commands << [:stack, :push, NONE]
+          commands << [:stack_push, NONE]
           commands.concat compile_call(name, args)
         else
           commands.concat LOAD_TMP_COMMANDS
           commands.concat compile_call(:"Array##{name}", args)
         end
-        commands << [:flow, :jump, end_label]
+        commands << [:flow_jump, end_label]
 
-        commands << [:flow, :def, is_hash_label]
+        commands << [:flow_def, is_hash_label]
         if top_level_p.(:Hash)
-          commands << [:stack, :push, NONE]
+          commands << [:stack_push, NONE]
           commands.concat compile_call(name, args)
         else
           commands.concat LOAD_TMP_COMMANDS
           commands.concat compile_call(:"Hash##{name}", args)
         end
-        commands << [:flow, :jump, end_label]
+        commands << [:flow_jump, end_label]
 
         # If receiver is NONE, it means method is called at the top level
-        commands << [:flow, :def, is_none_label]
-        commands << [:stack, :push, NONE]
+        commands << [:flow_def, is_none_label]
+        commands << [:stack_push, NONE]
         commands.concat compile_call(name, args)
 
-        commands << [:flow, :def, end_label]
+        commands << [:flow_def, end_label]
 
         commands
       end
@@ -693,16 +693,16 @@ module Akaza
         end_label = ident_to_label(nil)
         cond_label = ident_to_label(nil)
 
-        commands << [:flow, :def, cond_label]
-        commands << [:stack, :push, 1]
-        commands << [:calc, :sub]
-        commands << [:stack, :dup]
-        commands << [:flow, :jump_if_neg, end_label]
+        commands << [:flow_def, cond_label]
+        commands << [:stack_push, 1]
+        commands << [:calc_sub]
+        commands << [:stack_dup]
+        commands << [:flow_jump_if_neg, end_label]
 
         commands.concat(block.call)
 
-        commands << [:flow, :jump, cond_label]
-        commands << [:flow, :def, end_label]
+        commands << [:flow_jump, cond_label]
+        commands << [:flow_def, end_label]
 
         commands
       end
@@ -716,56 +716,56 @@ module Akaza
 
           commands.concat(compile_expr(x))
           commands.concat(UNWRAP_COMMANDS)
-          commands << [:flow, sym, else_label]
+          commands << [sym, else_label]
           if else_body
             commands.concat(compile_expr(else_body))
           else
-            commands << [:stack, :push, NIL]
+            commands << [:stack_push, NIL]
           end
-          commands << [:flow, :jump, end_label]
-          commands << [:flow, :def, else_label]
+          commands << [:flow_jump, end_label]
+          commands << [:flow_def, else_label]
           if if_body
             commands.concat(compile_expr(if_body))
           else
-            commands << [:stack, :push, NIL]
+            commands << [:stack_push, NIL]
           end
-          commands << [:flow, :def, end_label]
+          commands << [:flow_def, end_label]
         end
 
         case cond
         in [:OPCALL, [:LIT, 0], :==, [:ARRAY, x, nil]]
-          optimized_body.(x, :jump_if_zero)
+          optimized_body.(x, :flow_jump_if_zero)
         in [:OPCALL, x, :==, [:ARRAY, [:LIT, 0], nil]]
-          optimized_body.(x, :jump_if_zero)
+          optimized_body.(x, :flow_jump_if_zero)
         in [:OPCALL, x, :<, [:ARRAY, [:LIT, 0], nil]]
-          optimized_body.(x, :jump_if_neg)
+          optimized_body.(x, :flow_jump_if_neg)
         in [:OPCALL, [:LIT, 0], :<, [:ARRAY, x, nil]]
-          optimized_body.(x, :jump_if_neg)
+          optimized_body.(x, :flow_jump_if_neg)
         else
           if_label = ident_to_label(nil)
           end_label = ident_to_label(nil)
 
           commands.concat compile_expr(cond)
-          commands << [:flow, :call, rtest_label]
-          commands << [:flow, :jump_if_zero, if_label]
+          commands << [:flow_call, rtest_label]
+          commands << [:flow_jump_if_zero, if_label]
 
           # when false
           if else_body
             commands.concat compile_expr(else_body)
           else
-            commands << [:stack, :push, NIL]
+            commands << [:stack_push, NIL]
           end
-          commands << [:flow, :jump, end_label]
+          commands << [:flow_jump, end_label]
 
           # when true
-          commands << [:flow, :def, if_label]
+          commands << [:flow_def, if_label]
           if if_body
             commands.concat compile_expr(if_body)
           else
-            commands << [:stack, :push, NIL]
+            commands << [:stack_push, NIL]
           end
 
-          commands << [:flow, :def, end_label]
+          commands << [:flow_def, end_label]
         end
 
         commands
@@ -788,32 +788,32 @@ module Akaza
             body_labels << ident_to_label(nil)
 
             objs.each do |obj|
-              commands << [:stack, :dup]
+              commands << [:stack_dup]
               commands.concat compile_expr(obj)
-              commands << [:calc, :sub]
-              commands << [:flow, :jump_if_zero, body_labels.last]
+              commands << [:calc_sub]
+              commands << [:flow_jump_if_zero, body_labels.last]
             end
           else # When case-else body
             else_node = when_node
           end
         end
 
-        commands << [:stack, :pop] # pop cond object
+        commands << [:stack_pop] # pop cond object
         if else_node
           commands.concat compile_expr(else_node)
         else
-          commands << [:stack, :push, NIL]
+          commands << [:stack_push, NIL]
         end
-        commands << [:flow, :jump, end_label]
+        commands << [:flow_jump, end_label]
 
         bodies.zip(body_labels).each do |body, label|
-          commands << [:flow, :def, label]
-          commands << [:stack, :pop] # pop cond object
+          commands << [:flow_def, label]
+          commands << [:stack_pop] # pop cond object
           commands.concat compile_expr(body)
-          commands << [:flow, :jump, end_label]
+          commands << [:flow_jump, end_label]
         end
 
-        commands << [:flow, :def, end_label]
+        commands << [:flow_def, end_label]
         commands
       end
 
@@ -824,45 +824,45 @@ module Akaza
         end_label = ident_to_label(nil)
 
         make_body = -> (x, sym) do
-          commands << [:flow, :def, cond_label]
+          commands << [:flow_def, cond_label]
           commands.concat(compile_expr(x))
           commands.concat(UNWRAP_COMMANDS)
-          commands << [:flow, sym, body_label]
-          commands << [:flow, :jump, end_label]
-          commands << [:flow, :def, body_label]
+          commands << [sym, body_label]
+          commands << [:flow_jump, end_label]
+          commands << [:flow_def, body_label]
           commands.concat(compile_expr(body))
-          commands << [:stack, :pop]
-          commands << [:flow, :jump, cond_label]
-          commands << [:flow, :def, end_label]
-          commands << [:stack, :push, NIL]
+          commands << [:stack_pop]
+          commands << [:flow_jump, cond_label]
+          commands << [:flow_def, end_label]
+          commands << [:stack_push, NIL]
         end
 
         case cond
         in [:TRUE] # Optimized
-          commands << [:flow, :def, cond_label]
+          commands << [:flow_def, cond_label]
           commands.concat compile_expr(body)
-          commands << [:stack, :pop]
-          commands << [:flow, :jump, cond_label]
+          commands << [:stack_pop]
+          commands << [:flow_jump, cond_label]
         in [:OPCALL, [:LIT, 0], :==, [:ARRAY, x, nil]]
-          make_body.(x, :jump_if_zero)
+          make_body.(x, :flow_jump_if_zero)
         in [:OPCALL, x, :==, [:ARRAY, [:LIT, 0], nil]]
-          make_body.(x, :jump_if_zero)
+          make_body.(x, :flow_jump_if_zero)
         in [:OPCALL, x, :<, [:ARRAY, [:LIT, 0], nil]]
-          make_body.(x, :jump_if_neg)
+          make_body.(x, :flow_jump_if_neg)
         in [:OPCALL, [:LIT, 0], :<, [:ARRAY, x, nil]]
-          make_body.(x, :jump_if_neg)
+          make_body.(x, :flow_jump_if_neg)
         else
-          commands << [:flow, :def, cond_label]
+          commands << [:flow_def, cond_label]
           commands.concat(compile_expr(cond))
-          commands << [:flow, :call, rtest_label]
-          commands << [:flow, :jump_if_zero, body_label]
-          commands << [:flow, :jump, end_label]
-          commands << [:flow, :def, body_label]
+          commands << [:flow_call, rtest_label]
+          commands << [:flow_jump_if_zero, body_label]
+          commands << [:flow_jump, end_label]
+          commands << [:flow_def, body_label]
           commands.concat(compile_expr(body))
-          commands << [:stack, :pop]
-          commands << [:flow, :jump, cond_label]
-          commands << [:flow, :def, end_label]
-          commands << [:stack, :push, NIL]
+          commands << [:stack_pop]
+          commands << [:flow_jump, cond_label]
+          commands << [:flow_def, end_label]
+          commands << [:stack_push, NIL]
         end
 
         commands
@@ -875,11 +875,11 @@ module Akaza
         commands = []
 
         msg.bytes.each do |byte|
-          commands << [:stack, :push, byte]
-          commands << [:io, :write_char]
+          commands << [:stack_push, byte]
+          commands << [:io_write_char]
         end
 
-        commands << [:flow, :exit]
+        commands << [:flow_exit]
 
         commands
       end
@@ -887,20 +887,20 @@ module Akaza
       private def compile_def(name, lvar_table, args_count, body, klass)
         label = klass ? ident_to_label(:"#{klass}##{name}") : ident_to_label(name)
         m = [
-          [:flow, :def, label],
+          [:flow_def, label],
         ]
         args = lvar_table[0...args_count].reverse
         m.concat update_lvar_commands(lvar_table, args: args)
         args.each do |args_name|
           addr = variable_name_to_addr(args_name)
-          m << [:stack, :push, addr]
-          m << [:stack, :swap]
-          m << [:heap, :save]
+          m << [:stack_push, addr]
+          m << [:stack_swap]
+          m << [:heap_save]
         end
 
         m.concat(compile_expr(body))
         @lvars_stack.pop
-        m << [:flow, :end]
+        m << [:flow_end]
 
         @methods << m
 
@@ -914,15 +914,15 @@ module Akaza
 
         HASH_SIZE.times do
           commands.concat ALLOCATE_NEW_HASH_ITEM_COMMANDS
-          commands << [:stack, :pop]
+          commands << [:stack_pop]
         end
 
         # stack: [hash_addr]
-        commands << [:stack, :dup]
-        commands << [:stack, :dup]
-        commands << [:stack, :push, 1]
-        commands << [:calc, :add]
-        commands << [:heap, :save]
+        commands << [:stack_dup]
+        commands << [:stack_dup]
+        commands << [:stack_push, 1]
+        commands << [:calc_add]
+        commands << [:heap_save]
         # stack: [hash_addr]
 
         commands.concat(WRAP_HASH_COMMANDS)
@@ -935,9 +935,9 @@ module Akaza
       private def save_to_self_commands
         commands = []
         self_addr = variable_name_to_addr(:self)
-        commands << [:stack, :push, self_addr]
-        commands << [:stack, :swap]
-        commands << [:heap, :save]
+        commands << [:stack_push, self_addr]
+        commands << [:stack_swap]
+        commands << [:heap_save]
         commands
       end
 
@@ -946,8 +946,8 @@ module Akaza
       private def load_from_self_commands
         commands = []
         self_addr = variable_name_to_addr(:self)
-        commands << [:stack, :push, self_addr]
-        commands << [:heap, :load]
+        commands << [:stack_push, self_addr]
+        commands << [:heap_load]
         commands
       end
 
@@ -957,79 +957,79 @@ module Akaza
         @realloc_array_label ||= (
           label = ident_to_label(nil)
           commands = []
-          commands << [:flow, :def, label]
+          commands << [:flow_def, label]
 
           # stack: [addr_of_first_addr]
           # Get cap addr
-          commands << [:stack, :dup]
-          commands << [:stack, :push, 2]
-          commands << [:calc, :add]
-          commands << [:stack, :dup]
-          commands << [:heap, :load]
+          commands << [:stack_dup]
+          commands << [:stack_push, 2]
+          commands << [:calc_add]
+          commands << [:stack_dup]
+          commands << [:heap_load]
           # stack: [addr_of_first_addr, cap_addr, cap]
 
-          commands << [:stack, :push, 2]
-          commands << [:calc, :multi]
+          commands << [:stack_push, 2]
+          commands << [:calc_multi]
           # stack: [addr_of_first_addr, cap_addr, new_cap]
           # Update cap
-          commands << [:stack, :dup]
+          commands << [:stack_dup]
           commands.concat SAVE_TMP_COMMANDS
-          commands << [:heap, :save]
+          commands << [:heap_save]
           commands.concat LOAD_TMP_COMMANDS
           # stack: [addr_of_first_addr, new_cap]
           commands.concat NEXT_HEAP_ADDRESS
           commands.concat SAVE_TMP_COMMANDS # new_item_addr
           commands.concat ALLOCATE_N_HEAP_COMMANDS
           # stack: [addr_of_first_addr]
-          commands << [:stack, :dup]
-          commands << [:heap, :load]
+          commands << [:stack_dup]
+          commands << [:heap_load]
           # stack: [addr_of_first_addr, old_first_addr]
           # Update first addr
-          commands << [:stack, :swap]
-          commands << [:stack, :dup]
+          commands << [:stack_swap]
+          commands << [:stack_dup]
           commands.concat LOAD_TMP_COMMANDS
           # stack: [old_first_addr, addr_of_first_addr, addr_of_first_addr, new_first_addr]
-          commands << [:heap, :save]
-          commands << [:stack, :swap]
+          commands << [:heap_save]
+          commands << [:stack_swap]
           # stack: [addr_of_first_addr, old_first_addr]
           # Load size
-          commands << [:stack, :swap]
-          commands << [:stack, :push, 1]
-          commands << [:calc, :add]
-          commands << [:heap, :load]
+          commands << [:stack_swap]
+          commands << [:stack_push, 1]
+          commands << [:calc_add]
+          commands << [:heap_load]
           # stack: [old_first_addr, size]
           # Move old items to new addresses
           commands.concat(times do
             c = []
-            c << [:stack, :swap]
+            c << [:stack_swap]
             # stack: idx, old_target_addr]
-            c << [:stack, :dup]
+            c << [:stack_dup]
             c.concat LOAD_TMP_COMMANDS
             # stack: [idx, old_target_addr, old_target_addr, new_target_addr]
 
             # Update tmp to new_next_addr
-            c << [:stack, :dup]
-            c << [:stack, :push, 1]
-            c << [:calc, :add]
+            c << [:stack_dup]
+            c << [:stack_push, 1]
+            c << [:calc_add]
             c.concat SAVE_TMP_COMMANDS
 
             # stack: [idx, old_target_addr, old_target_addr, new_target_addr]
-            c << [:stack, :swap]
-            c << [:heap, :load]
+            c << [:stack_swap]
+            c << [:heap_load]
             # stack: [idx, old_target_addr, new_target_addr, old_target]
-            c << [:heap, :save]
+            c << [:heap_save]
             # stack: [idx, old_target_addr]
-            c << [:stack, :push, 1]
-            c << [:calc, :add]
+            c << [:stack_push, 1]
+            c << [:calc_add]
             # stack: [old_next_addr, idx]
-            c << [:stack, :swap]
+            c << [:stack_swap]
             c
           end)
-          commands << [:stack, :pop] # idx
-          commands << [:stack, :pop] # old_next_addr
+          commands << [:stack_pop] # idx
+          commands << [:stack_pop] # old_next_addr
 
 
-          commands << [:flow, :end]
+          commands << [:flow_end]
           @methods << commands
           label
         )
@@ -1044,18 +1044,18 @@ module Akaza
           label_end = ident_to_label(nil)
 
           commands = []
-          commands << [:flow, :def, label]
+          commands << [:flow_def, label]
 
-          commands << [:calc, :sub]
-          commands << [:flow, :jump_if_zero, label_if_zero]
-          commands << [:stack, :push, FALSE]
-          commands << [:flow, :jump, label_end]
+          commands << [:calc_sub]
+          commands << [:flow_jump_if_zero, label_if_zero]
+          commands << [:stack_push, FALSE]
+          commands << [:flow_jump, label_end]
 
-          commands << [:flow, :def, label_if_zero]
-          commands << [:stack, :push, TRUE]
+          commands << [:flow_def, label_if_zero]
+          commands << [:stack_push, TRUE]
 
-          commands << [:flow, :def, label_end]
-          commands << [:flow, :end]
+          commands << [:flow_def, label_end]
+          commands << [:flow_end]
           @methods << commands
           label
         )
@@ -1070,21 +1070,21 @@ module Akaza
           end_label = ident_to_label(nil)
 
           commands = []
-          commands << [:flow, :def, label]
+          commands << [:flow_def, label]
 
-          commands << [:flow, :call, rtest_label]
-          commands << [:flow, :jump_if_zero, true_label]
+          commands << [:flow_call, rtest_label]
+          commands << [:flow_jump_if_zero, true_label]
 
           # when obj is falsy
-          commands << [:stack, :push, TRUE]
-          commands << [:flow, :jump, end_label]
+          commands << [:stack_push, TRUE]
+          commands << [:flow_jump, end_label]
 
           # when obj is truthy
-          commands << [:flow, :def, true_label]
-          commands << [:stack, :push, FALSE]
+          commands << [:flow_def, true_label]
+          commands << [:stack_push, FALSE]
 
-          commands << [:flow, :def, end_label]
-          commands << [:flow, :end]
+          commands << [:flow_def, end_label]
+          commands << [:flow_end]
           @methods << commands
           label
         )
@@ -1103,30 +1103,30 @@ module Akaza
           end_label = ident_to_label(nil)
 
           commands = []
-          commands << [:flow, :def, label]
+          commands << [:flow_def, label]
 
-          commands << [:stack, :dup]
-          commands << [:stack, :push, NIL]
-          commands << [:calc, :sub]
-          commands << [:flow, :jump_if_zero, when_nil_label]
+          commands << [:stack_dup]
+          commands << [:stack_push, NIL]
+          commands << [:calc_sub]
+          commands << [:flow_jump_if_zero, when_nil_label]
 
-          commands << [:stack, :push, FALSE]
-          commands << [:calc, :sub]
-          commands << [:flow, :jump_if_zero, when_false_label]
+          commands << [:stack_push, FALSE]
+          commands << [:calc_sub]
+          commands << [:flow_jump_if_zero, when_false_label]
 
           # when truthy
-          commands << [:stack, :push, truthy]
-          commands << [:flow, :jump, end_label]
+          commands << [:stack_push, truthy]
+          commands << [:flow_jump, end_label]
 
           # when nil
-          commands << [:flow, :def, when_nil_label]
-          commands << [:stack, :pop]
+          commands << [:flow_def, when_nil_label]
+          commands << [:stack_pop]
           # when false
-          commands << [:flow, :def, when_false_label]
-          commands << [:stack, :push, falsy]
+          commands << [:flow_def, when_false_label]
+          commands << [:stack_push, falsy]
 
-          commands << [:flow, :def, end_label]
-          commands << [:flow, :end]
+          commands << [:flow_def, end_label]
+          commands << [:flow_end]
           @methods << commands
           label
         )
@@ -1141,13 +1141,13 @@ module Akaza
           label = ident_to_label(nil)
 
           commands = []
-          commands << [:flow, :def, label]
+          commands << [:flow_def, label]
 
-          commands << [:stack, :push, 2 ** TYPE_BITS]
-          commands << [:calc, :mod]
-          commands << [:calc, :sub]
+          commands << [:stack_push, 2 ** TYPE_BITS]
+          commands << [:calc_mod]
+          commands << [:calc_sub]
 
-          commands << [:flow, :end]
+          commands << [:flow_end]
           @methods << commands
           label
         )
@@ -1162,67 +1162,67 @@ module Akaza
           check_key_equivalent_label = ident_to_label(nil)
 
           commands = []
-          commands << [:flow, :def, label]
+          commands << [:flow_def, label]
 
           commands.concat(UNWRAP_COMMANDS)
-          commands << [:heap, :load]
-          commands << [:stack, :swap]
+          commands << [:heap_load]
+          commands << [:stack_swap]
           # stack: [addr_of_first_key, key (wrapped)]
-          commands << [:stack, :dup]
+          commands << [:stack_dup]
           commands.concat(SAVE_TMP_COMMANDS)
 
           # calc hash
           # stack: [addr_of_first_key, key (wrapped)]
           commands.concat(UNWRAP_COMMANDS)
-          commands << [:stack, :push, HASH_SIZE]
-          commands << [:calc, :mod]
-          commands << [:stack, :push, 3]
-          commands << [:calc, :multi]
+          commands << [:stack_push, HASH_SIZE]
+          commands << [:calc_mod]
+          commands << [:stack_push, 3]
+          commands << [:calc_multi]
           # stack: [addr_of_first_key, hash]
 
-          commands << [:calc, :add]
-          commands << [:stack, :push, NONE_ADDR]
-          commands << [:stack, :swap]
+          commands << [:calc_add]
+          commands << [:stack_push, NONE_ADDR]
+          commands << [:stack_swap]
           # stack: [addr_of_prev_key, addr_of_target_key]
 
           # Check key equivalent
-          commands << [:flow, :def, check_key_equivalent_label]
-          commands << [:stack, :dup]
-          commands << [:heap, :load]
+          commands << [:flow_def, check_key_equivalent_label]
+          commands << [:stack_dup]
+          commands << [:heap_load]
           commands.concat(LOAD_TMP_COMMANDS)
           # stack: [addr_of_prev_key, addr_of_target_key, target_key, key]
-          commands << [:calc, :sub]
-          commands << [:flow, :jump_if_zero, key_not_collision_label]
+          commands << [:calc_sub]
+          commands << [:flow_jump_if_zero, key_not_collision_label]
           # stack: [addr_of_prev_key, addr_of_target_key]
           # Check NONE
-          commands << [:stack, :dup]
-          commands << [:heap, :load]
-          commands << [:stack, :push, NONE]
-          commands << [:calc, :sub]
-          commands << [:flow, :jump_if_zero, key_not_collision_label]
+          commands << [:stack_dup]
+          commands << [:heap_load]
+          commands << [:stack_push, NONE]
+          commands << [:calc_sub]
+          commands << [:flow_jump_if_zero, key_not_collision_label]
 
           # stack: [addr_of_prev_key, addr_of_target_key]
 
           # when collistion
           # pop prev key
-          commands << [:stack, :swap]
-          commands << [:stack, :pop]
-          commands << [:stack, :dup]
+          commands << [:stack_swap]
+          commands << [:stack_pop]
+          commands << [:stack_dup]
           # stack: [addr_of_target_key, addr_of_target_key]
-          commands << [:stack, :push, 2]
-          commands << [:calc, :add]
+          commands << [:stack_push, 2]
+          commands << [:calc_add]
           # stack: [addr_of_prev_key, addr_of_next_key_addr]
-          commands << [:heap, :load]
+          commands << [:heap_load]
           # stack: [addr_of_prev_key, next_key_addr]
-          commands << [:stack, :dup]
-          commands << [:stack, :push, NONE_ADDR]
-          commands << [:calc, :sub]
-          commands << [:flow, :jump_if_zero, key_not_collision_label]
-          commands << [:flow, :jump, check_key_equivalent_label]
+          commands << [:stack_dup]
+          commands << [:stack_push, NONE_ADDR]
+          commands << [:calc_sub]
+          commands << [:flow_jump_if_zero, key_not_collision_label]
+          commands << [:flow_jump, check_key_equivalent_label]
 
-          commands << [:flow, :def, key_not_collision_label]
+          commands << [:flow_def, key_not_collision_label]
 
-          commands << [:flow, :end]
+          commands << [:flow_end]
           @methods << commands
           label
         )
@@ -1234,31 +1234,31 @@ module Akaza
         commands = []
 
         commands.concat ALLOCATE_HEAP_COMMANDS
-        commands << [:stack, :dup]
+        commands << [:stack_dup]
         commands.concat WRAP_ARRAY_COMMANDS
         commands.concat SAVE_TMP_COMMANDS
         # stack: [array_addr_1]
 
         # Save first addr
-        commands << [:stack, :dup]
-        commands << [:stack, :push, 3]
-        commands << [:calc, :add]
-        commands << [:heap, :save]
+        commands << [:stack_dup]
+        commands << [:stack_push, 3]
+        commands << [:calc_add]
+        commands << [:heap_save]
         # stack: []
 
         # Allocate size
         commands.concat ALLOCATE_HEAP_COMMANDS
-        commands << [:stack, :push, size]
-        commands << [:heap, :save]
+        commands << [:stack_push, size]
+        commands << [:heap_save]
 
         # Allocate cap
         cap = ARRAY_FIRST_CAPACITY < size ? size * 2 : ARRAY_FIRST_CAPACITY
         commands.concat ALLOCATE_HEAP_COMMANDS
-        commands << [:stack, :push, cap]
-        commands << [:heap, :save]
+        commands << [:stack_push, cap]
+        commands << [:heap_save]
 
         # Allocate cap size heaps
-        commands << [:stack, :push, cap]
+        commands << [:stack_push, cap]
         commands.concat ALLOCATE_N_HEAP_COMMANDS
 
         commands.concat LOAD_TMP_COMMANDS
@@ -1271,16 +1271,16 @@ module Akaza
       private def define_array_size
         label = ident_to_label(:'Array#size')
         commands = []
-        commands << [:flow, :def, label]
+        commands << [:flow_def, label]
 
         commands.concat load_from_self_commands
         commands.concat UNWRAP_COMMANDS
-        commands << [:stack, :push, 1]
-        commands << [:calc, :add]
-        commands << [:heap, :load]
+        commands << [:stack_push, 1]
+        commands << [:calc_add]
+        commands << [:heap_load]
         commands.concat WRAP_NUMBER_COMMANDS
 
-        commands << [:flow, :end]
+        commands << [:flow_end]
         # stack: [size]
         @methods << commands
       end
@@ -1292,48 +1292,48 @@ module Akaza
         label = ident_to_label(:'Array#pop')
         when_empty_label = ident_to_label(nil)
         commands = []
-        commands << [:flow, :def, label]
+        commands << [:flow_def, label]
 
         commands.concat load_from_self_commands
         commands.concat UNWRAP_COMMANDS
-        commands << [:stack, :push, 1]
-        commands << [:calc, :add]
-        commands << [:heap, :load]
+        commands << [:stack_push, 1]
+        commands << [:calc_add]
+        commands << [:heap_load]
         # stack: [size]
         # check empty
-        commands << [:stack, :dup]
-        commands << [:flow, :jump_if_zero, when_empty_label]
+        commands << [:stack_dup]
+        commands << [:flow_jump_if_zero, when_empty_label]
 
         # when not empty
         # Decrease size
-        commands << [:stack, :dup]
+        commands << [:stack_dup]
         commands.concat load_from_self_commands
         commands.concat UNWRAP_COMMANDS
-        commands << [:stack, :push, 1]
-        commands << [:calc, :add]
+        commands << [:stack_push, 1]
+        commands << [:calc_add]
         # stack: [size, size, size_addr]
-        commands << [:stack, :swap]
-        commands << [:stack, :push, 1]
-        commands << [:calc, :sub]
-        commands << [:heap, :save]
+        commands << [:stack_swap]
+        commands << [:stack_push, 1]
+        commands << [:calc_sub]
+        commands << [:heap_save]
         # Load item
         commands.concat load_from_self_commands
         commands.concat UNWRAP_COMMANDS
-        commands << [:heap, :load]
+        commands << [:heap_load]
         # stack: [size, first_addr]
-        commands << [:stack, :push, -1]
-        commands << [:calc, :add]
-        commands << [:calc, :add]
+        commands << [:stack_push, -1]
+        commands << [:calc_add]
+        commands << [:calc_add]
         # stack: [addr_of_target_item]
-        commands << [:heap, :load]
+        commands << [:heap_load]
 
-        commands << [:flow, :end]
+        commands << [:flow_end]
         # stack: [target_item]
 
-        commands << [:flow, :def, when_empty_label]
-        commands << [:stack, :pop]
-        commands << [:stack, :push, NIL]
-        commands << [:flow, :end]
+        commands << [:flow_def, when_empty_label]
+        commands << [:stack_pop]
+        commands << [:stack_push, NIL]
+        commands << [:flow_end]
         # stack: [nil]
         @methods << commands
       end
@@ -1346,66 +1346,66 @@ module Akaza
         when_realloc_label = ident_to_label(nil)
         when_no_realloc_label = ident_to_label(nil)
         commands = []
-        commands << [:flow, :def, label]
+        commands << [:flow_def, label]
 
         commands.concat load_from_self_commands
         commands.concat(UNWRAP_COMMANDS)
         # stack: [item, addr_of_first_addr]
 
         # Check realloc necessary
-        commands << [:stack, :dup]
-        commands << [:stack, :push, 1]
-        commands << [:calc, :add]
+        commands << [:stack_dup]
+        commands << [:stack_push, 1]
+        commands << [:calc_add]
         # stack: [item, addr_of_first_addr, addr_of_size]
-        commands << [:stack, :dup]
-        commands << [:stack, :push, 1]
-        commands << [:calc, :add]
+        commands << [:stack_dup]
+        commands << [:stack_push, 1]
+        commands << [:calc_add]
         # stack: [item, addr_of_first_addr, addr_of_size, addr_of_cap]
-        commands << [:heap, :load]
-        commands << [:stack, :swap]
-        commands << [:heap, :load]
+        commands << [:heap_load]
+        commands << [:stack_swap]
+        commands << [:heap_load]
         # stack: [item, addr_of_first_addr, cap, size]
-        commands << [:calc, :sub]
-        commands << [:flow, :jump_if_zero, when_realloc_label]
-        commands << [:flow, :jump, when_no_realloc_label]
+        commands << [:calc_sub]
+        commands << [:flow_jump_if_zero, when_realloc_label]
+        commands << [:flow_jump, when_no_realloc_label]
 
         # Realloc
-        commands << [:flow, :def, when_realloc_label]
-        commands << [:stack, :dup]
-        commands << [:flow, :call, realloc_array_label]
+        commands << [:flow_def, when_realloc_label]
+        commands << [:stack_dup]
+        commands << [:flow_call, realloc_array_label]
 
-        commands << [:flow, :def, when_no_realloc_label]
+        commands << [:flow_def, when_no_realloc_label]
 
         # Push
         # stack: [item, addr_of_first_addr]
-        commands << [:stack, :dup]
-        commands << [:stack, :push, 1]
-        commands << [:calc, :add]
-        commands << [:heap, :load]
+        commands << [:stack_dup]
+        commands << [:stack_push, 1]
+        commands << [:calc_add]
+        commands << [:heap_load]
         # stack: [item, addr_of_first_addr, size]
-        commands << [:stack, :swap]
-        commands << [:heap, :load]
+        commands << [:stack_swap]
+        commands << [:heap_load]
         # stack: [item, size, first_addr]
-        commands << [:calc, :add]
+        commands << [:calc_add]
         # stack: [item, addr_of_target]
-        commands << [:stack, :swap]
-        commands << [:heap, :save]
+        commands << [:stack_swap]
+        commands << [:heap_save]
 
         commands.concat load_from_self_commands
         # Update size
-        commands << [:stack, :dup]
+        commands << [:stack_dup]
         commands.concat UNWRAP_COMMANDS
         # stack: [self, addr_of_first_addr]
-        commands << [:stack, :push, 1]
-        commands << [:calc, :add]
-        commands << [:stack, :dup]
-        commands << [:heap, :load]
+        commands << [:stack_push, 1]
+        commands << [:calc_add]
+        commands << [:stack_dup]
+        commands << [:heap_load]
         # stack: [self, size_addr, size]
-        commands << [:stack, :push, 1]
-        commands << [:calc, :add]
-        commands << [:heap, :save]
+        commands << [:stack_push, 1]
+        commands << [:calc_add]
+        commands << [:heap_save]
 
-        commands << [:flow, :end]
+        commands << [:flow_end]
         # stack: [self]
         @methods << commands
       end
@@ -1417,19 +1417,19 @@ module Akaza
         label = ident_to_label(:'Array#[]')
 
         commands = []
-        commands << [:flow, :def, label]
+        commands << [:flow_def, label]
 
         commands.concat(UNWRAP_COMMANDS)
         commands.concat load_from_self_commands
         # stack: [index, recv]
         commands.concat(UNWRAP_COMMANDS)
-        commands << [:heap, :load]
+        commands << [:heap_load]
         # stack: [addr_of_first_item, index]
-        commands << [:calc, :add]
+        commands << [:calc_add]
         # TODO: range check and return nil
-        commands << [:heap, :load]
+        commands << [:heap_load]
 
-        commands << [:flow, :end]
+        commands << [:flow_end]
         @methods << commands
       end
 
@@ -1440,26 +1440,26 @@ module Akaza
         label = ident_to_label(:'Array#[]=')
 
         commands = []
-        commands << [:flow, :def, label]
+        commands << [:flow_def, label]
 
-        commands << [:stack, :swap]
+        commands << [:stack_swap]
         # stack: [value, index]
         commands.concat UNWRAP_COMMANDS
         commands.concat load_from_self_commands
         commands.concat(UNWRAP_COMMANDS)
-        commands << [:heap, :load]
+        commands << [:heap_load]
         # stack: [value, index, first_addr]
-        commands << [:calc, :add]
+        commands << [:calc_add]
         # TODO: range check and realloc
-        commands << [:stack, :swap]
+        commands << [:stack_swap]
         # stack: [target_addr, value]
-        commands << [:stack, :dup]
+        commands << [:stack_dup]
         commands.concat SAVE_TMP_COMMANDS
-        commands << [:heap, :save]
+        commands << [:heap_save]
         commands.concat LOAD_TMP_COMMANDS
         # stack: [value]
 
-        commands << [:flow, :end]
+        commands << [:flow_end]
         @methods << commands
       end
 
@@ -1470,44 +1470,44 @@ module Akaza
         when_not_found_label = ident_to_label(nil)
 
         commands = []
-        commands << [:flow, :def, label]
+        commands << [:flow_def, label]
 
         commands.concat load_from_self_commands
-        commands << [:flow, :call, hash_key_to_addr_label]
+        commands << [:flow_call, hash_key_to_addr_label]
         # stack: [addr_of_prev_key, addr_of_target_key]
 
         # pop addr_of_prev_key
-        commands << [:stack, :swap]
-        commands << [:stack, :pop]
+        commands << [:stack_swap]
+        commands << [:stack_pop]
 
         # stack: [addr_of_target_key]
         # check NONE_ADDR (chained)
-        commands << [:stack, :dup]
-        commands << [:stack, :push, NONE_ADDR]
-        commands << [:calc, :sub]
-        commands << [:flow, :jump_if_zero, when_not_found_label]
+        commands << [:stack_dup]
+        commands << [:stack_push, NONE_ADDR]
+        commands << [:calc_sub]
+        commands << [:flow_jump_if_zero, when_not_found_label]
 
         # check NONE (not chained)
-        commands << [:stack, :dup]
-        commands << [:heap, :load]
+        commands << [:stack_dup]
+        commands << [:heap_load]
         # stack: [addr_of_target_key, target_key]
-        commands << [:stack, :push, NONE]
-        commands << [:calc, :sub]
-        commands << [:flow, :jump_if_zero, when_not_found_label]
+        commands << [:stack_push, NONE]
+        commands << [:calc_sub]
+        commands << [:flow_jump_if_zero, when_not_found_label]
 
         # when found
-        commands << [:stack, :push, 1]
-        commands << [:calc, :add]
+        commands << [:stack_push, 1]
+        commands << [:calc_add]
         # stack: [addr_of_target_value]
-        commands << [:heap, :load]
+        commands << [:heap_load]
 
-        commands << [:flow, :end]
+        commands << [:flow_end]
 
         # when not found
-        commands << [:flow, :def, when_not_found_label]
-        commands << [:stack, :pop]
-        commands << [:stack, :push, NIL]
-        commands << [:flow, :end]
+        commands << [:flow_def, when_not_found_label]
+        commands << [:stack_pop]
+        commands << [:stack_push, NIL]
+        commands << [:flow_end]
         @methods << commands
       end
 
@@ -1521,81 +1521,81 @@ module Akaza
         fill_none_addr_label = ident_to_label(nil)
 
         commands = []
-        commands << [:flow, :def, label]
+        commands << [:flow_def, label]
 
         # stack: [key, value]
-        commands << [:stack, :swap]
-        commands << [:stack, :dup]
+        commands << [:stack_swap]
+        commands << [:stack_dup]
         commands.concat load_from_self_commands
         # stack: [value, key, key, recv]
 
-        commands << [:flow, :call, hash_key_to_addr_label]
+        commands << [:flow_call, hash_key_to_addr_label]
         # stack: [value, key, addr_of_prev_key, addr_of_target_key]
 
         # check NONE_ADDR
-        commands << [:stack, :dup]
-        commands << [:stack, :push, NONE_ADDR]
-        commands << [:calc, :sub]
-        commands << [:flow, :jump_if_zero, when_not_allocated_label]
-        commands << [:flow, :jump, when_allocated_label]
+        commands << [:stack_dup]
+        commands << [:stack_push, NONE_ADDR]
+        commands << [:calc_sub]
+        commands << [:flow_jump_if_zero, when_not_allocated_label]
+        commands << [:flow_jump, when_allocated_label]
 
         # When not allocated
-        commands << [:flow, :def, when_not_allocated_label]
+        commands << [:flow_def, when_not_allocated_label]
         # stack: [value, key, addr_of_prev_key, addr_of_target_key]
-        commands << [:stack, :pop]
-        commands << [:stack, :push, 2]
-        commands << [:calc, :add]
+        commands << [:stack_pop]
+        commands << [:stack_push, 2]
+        commands << [:calc_add]
         commands.concat ALLOCATE_NEW_HASH_ITEM_COMMANDS
         # stack: [value, key, addr_of_prev_key, allocated_addr_of_target_key]
-        commands << [:stack, :dup]
+        commands << [:stack_dup]
         commands.concat SAVE_TMP_COMMANDS
-        commands << [:heap, :save]
+        commands << [:heap_save]
         commands.concat LOAD_TMP_COMMANDS
         # stack: [value, key, allocated_addr_of_target_key]
 
         # Fill NONE_ADDR to next
-        commands << [:flow, :def, fill_none_addr_label]
-        commands << [:stack, :dup]
-        commands << [:stack, :push, 2]
-        commands << [:calc, :add]
+        commands << [:flow_def, fill_none_addr_label]
+        commands << [:stack_dup]
+        commands << [:stack_push, 2]
+        commands << [:calc_add]
         # stack: [value, key, allocated_addr_of_target_key, addr_of_next_key_addr]
-        commands << [:stack, :push, NONE_ADDR]
-        commands << [:heap, :save]
+        commands << [:stack_push, NONE_ADDR]
+        commands << [:heap_save]
         # stack: [value, key, allocated_addr_of_target_key]
-        commands << [:flow, :jump, after_allocated_label]
+        commands << [:flow_jump, after_allocated_label]
 
         # When allocated
-        commands << [:flow, :def, when_allocated_label]
+        commands << [:flow_def, when_allocated_label]
         # stack: [value, key, addr_of_prev_key, addr_of_target_key]
-        commands << [:stack, :swap]
-        commands << [:stack, :pop]
+        commands << [:stack_swap]
+        commands << [:stack_pop]
         # stack: [value, key, addr_of_target_key]
-        commands << [:stack, :dup]
-        commands << [:heap, :load]
-        commands << [:stack, :push, NONE]
-        commands << [:calc, :sub]
-        commands << [:flow, :jump_if_zero, fill_none_addr_label]
+        commands << [:stack_dup]
+        commands << [:heap_load]
+        commands << [:stack_push, NONE]
+        commands << [:calc_sub]
+        commands << [:flow_jump_if_zero, fill_none_addr_label]
 
         # stack: [value, key, addr_of_target_key]
-        commands << [:flow, :def, after_allocated_label]
+        commands << [:flow_def, after_allocated_label]
         # Save key
-        commands << [:stack, :dup]
+        commands << [:stack_dup]
         commands.concat SAVE_TMP_COMMANDS # addr_of_target_key
-        commands << [:stack, :swap]
-        commands << [:heap, :save]
+        commands << [:stack_swap]
+        commands << [:heap_save]
         # Save value
         commands.concat LOAD_TMP_COMMANDS # addr_of_target_key
         # stack: [value, addr_of_target_key]
-        commands << [:stack, :push, 1]
-        commands << [:calc, :add]
+        commands << [:stack_push, 1]
+        commands << [:calc_add]
         # stack: [value, addr_of_target_value]
-        commands << [:stack, :swap]
-        commands << [:stack, :dup]
+        commands << [:stack_swap]
+        commands << [:stack_dup]
         commands.concat SAVE_TMP_COMMANDS
-        commands << [:heap, :save]
+        commands << [:heap_save]
         commands.concat LOAD_TMP_COMMANDS
 
-        commands << [:flow, :end]
+        commands << [:flow_end]
         @methods << commands
       end
 
@@ -1611,31 +1611,31 @@ module Akaza
         end_label = ident_to_label(nil)
         neg_label = ident_to_label(nil)
         commands = []
-        commands << [:flow, :def, label]
+        commands << [:flow_def, label]
 
         commands.concat load_from_self_commands
-        commands << [:calc, :sub]
-        commands << [:stack, :dup]
-        commands << [:flow, :jump_if_zero, zero_label]
+        commands << [:calc_sub]
+        commands << [:stack_dup]
+        commands << [:flow_jump_if_zero, zero_label]
 
-        commands << [:flow, :jump_if_neg, neg_label]
+        commands << [:flow_jump_if_neg, neg_label]
 
         # if positive
-        commands << [:stack, :push, with_type(-1, TYPE_INT)]
-        commands << [:flow, :jump, end_label]
+        commands << [:stack_push, with_type(-1, TYPE_INT)]
+        commands << [:flow_jump, end_label]
 
         # if negative
-        commands << [:flow, :def, neg_label]
-        commands << [:stack, :push, with_type(1, TYPE_INT)]
-        commands << [:flow, :jump, end_label]
+        commands << [:flow_def, neg_label]
+        commands << [:stack_push, with_type(1, TYPE_INT)]
+        commands << [:flow_jump, end_label]
 
         # if equal
-        commands << [:flow, :def, zero_label]
-        commands << [:stack, :pop]
-        commands << [:stack, :push, with_type(0, TYPE_INT)]
+        commands << [:flow_def, zero_label]
+        commands << [:stack_pop]
+        commands << [:stack_push, with_type(0, TYPE_INT)]
 
-        commands << [:flow, :def, end_label]
-        commands << [:flow, :end]
+        commands << [:flow_def, end_label]
+        commands << [:flow_end]
         @methods << commands
       end
 
@@ -1693,9 +1693,9 @@ module Akaza
         commands = []
         addr_table.each do |var_name, addr|
           next if args.include?(var_name)
-          commands << [:stack, :push, addr]
-          commands << [:stack, :push, NIL]
-          commands << [:heap, :save]
+          commands << [:stack_push, addr]
+          commands << [:stack_push, NIL]
+          commands << [:heap_save]
         end
         @lvars_stack << addr_table.map{@2}
         lvars << variable_name_to_addr(:self)
