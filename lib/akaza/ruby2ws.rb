@@ -42,7 +42,7 @@ module Akaza
     TMP_ADDR = 1
     HEAP_COUNT_ADDR = 2
     LVAR_TABLE_ADDR = 3
-    LVAR_TABLE_SIZE_ADDR = 4
+    LVAR_TABLE_SIZE_ADDR = LVAR_TABLE_ADDR + 1
 
     TYPES = %w[Integer Hash Array]
     TYPE_BITS = 2
@@ -55,8 +55,6 @@ module Akaza
     HASH_SIZE = 11
 
     ARRAY_FIRST_CAPACITY = 10
-
-    FIRST_UNRESERVED_ADDR = LVAR_TABLE_ADDR + 2 + ARRAY_FIRST_CAPACITY + 1
 
     FALSE = 0 << TYPE_BITS + TYPE_SPECIAL
     # NONE is for internal. It does not available for user.
@@ -159,7 +157,7 @@ module Akaza
         @ruby_code = ruby_code
         @path = path
 
-        @variable_addr_index = FIRST_UNRESERVED_ADDR # TODO: remove me
+        @variable_addr_index = 100 # TODO: remove me
         @variable_addrs = {}
 
         @label_index = 0
@@ -288,6 +286,19 @@ module Akaza
           commands << [:stack_push, var_addr]
           commands << [:stack_swap]
           commands << [:heap_save]
+          # stack: [arg]
+
+          commands << [:stack_dup]
+          commands << [:stack_push, LVAR_TABLE_ADDR]
+          commands << [:heap_load]
+          commands << [:stack_push, LVAR_TABLE_SIZE_ADDR]
+          commands << [:heap_load]
+          commands << [:calc_add]
+          commands << [:stack_push, lvar_offset(var)]
+          commands << [:calc_sub]
+          # stack: [arg, arg, target_addr]
+          commands << [:stack_swap]
+          commands << [:heap_save]
         in [:CDECL, var, arg]
           commands.concat(compile_expr(arg))
           commands << [:stack_dup]
@@ -316,6 +327,7 @@ module Akaza
           commands.concat update_lvar_commands(lvar_table)
           commands.concat allocate_lvars_commands
           commands.concat(compile_expr(body))
+          commands.concat drop_lvars_commands
           @lvars_stack.pop
         in [:BEGIN, nil]
           # skip
@@ -1744,6 +1756,22 @@ module Akaza
           commands << [:flow_call, array_push_body_label]
         end
         commands
+      end
+
+      private def drop_lvars_commands
+        commands = []
+        size = lvars.size
+        commands << [:stack_push, LVAR_TABLE_SIZE_ADDR]
+        commands << [:stack_push, LVAR_TABLE_SIZE_ADDR]
+        commands << [:heap_load]
+        commands << [:stack_push, size]
+        commands << [:calc_sub]
+        commands << [:heap_save]
+        commands
+      end
+
+      private def lvar_offset(name)
+        lvars.index(variable_name_to_addr(name)) || raise("lvar #{name} does not exist")
       end
 
       private def lazy_compile_method(name)
