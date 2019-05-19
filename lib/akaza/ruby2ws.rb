@@ -313,7 +313,7 @@ module Akaza
           commands.concat compile_expr(scope)
           @current_class = nil
         in [:SCOPE, lvar_table, _, body]
-          commands.concat update_lvar_commands(lvar_table)
+          update_lvars(lvar_table)
           commands.concat allocate_lvars_commands
           commands.concat(compile_expr(body))
           commands.concat drop_lvars_commands
@@ -893,7 +893,7 @@ module Akaza
           [:flow_def, label],
         ]
         args = lvar_table[0...args_count].reverse
-        m.concat update_lvar_commands(lvar_table, args: args)
+        update_lvars(lvar_table)
 
         m.concat allocate_lvars_commands
         args.each do |args_name|
@@ -1711,20 +1711,10 @@ module Akaza
         @lvars_stack.last
       end
 
-      private def update_lvar_commands(table, args: [])
-        addr_table = table.map do |var_name|
-          [var_name, variable_name_to_addr(var_name)]
-        end
-        commands = []
-        addr_table.each do |var_name, addr|
-          next if args.include?(var_name)
-          commands << [:stack_push, addr]
-          commands << [:stack_push, NIL]
-          commands << [:heap_save]
-        end
-        @lvars_stack << addr_table.map{@2}
-        lvars << variable_name_to_addr(:self)
-        commands
+      private def update_lvars(table)
+        addr_table = table.dup
+        addr_table << :self
+        @lvars_stack << addr_table
       end
 
       private def allocate_lvars_commands
@@ -1764,7 +1754,7 @@ module Akaza
       end
 
       private def lvar_offset(name)
-        lvars.index(variable_name_to_addr(name)) || raise("lvar #{name} does not exist")
+        lvars.index(name) || raise("lvar #{name} does not exist")
       end
 
       private def lazy_compile_method(name)
