@@ -281,21 +281,10 @@ module Akaza
           commands << [:flow_exit]
         in [:LASGN, var, arg]
           commands.concat(compile_expr(arg))
-          commands << [:stack_dup]
-          var_addr = variable_name_to_addr(var)
-          commands << [:stack_push, var_addr]
-          commands << [:stack_swap]
-          commands << [:heap_save]
           # stack: [arg]
-
           commands << [:stack_dup]
-          commands << [:stack_push, LVAR_TABLE_ADDR]
-          commands << [:heap_load]
-          commands << [:stack_push, LVAR_TABLE_SIZE_ADDR]
-          commands << [:heap_load]
-          commands << [:calc_add]
-          commands << [:stack_push, lvar_offset(var)]
-          commands << [:calc_sub]
+
+          commands.concat lvar_addr_commands(var)
           # stack: [arg, arg, target_addr]
           commands << [:stack_swap]
           commands << [:heap_save]
@@ -396,7 +385,13 @@ module Akaza
         in [:NIL]
           commands << [:stack_push, NIL]
         in [:LVAR, name]
-          commands << [:stack_push, variable_name_to_addr(name)]
+          commands << [:stack_push, LVAR_TABLE_ADDR]
+          commands << [:heap_load]
+          commands << [:stack_push, LVAR_TABLE_SIZE_ADDR]
+          commands << [:heap_load]
+          commands << [:calc_add]
+          commands << [:stack_push, lvar_offset(name) + 1]
+          commands << [:calc_sub]
           commands << [:heap_load]
         in [:CONST, :Integer | :Array | :Hash | :Special => klass]
           k = {
@@ -584,42 +579,25 @@ module Akaza
         buf
       end
 
-      private def with_storing_lvars(commands, &block)
-        lvars.each do |var_addr|
-          # stack.push(addr); stack.push(val)
-          commands << [:stack_push, var_addr]
-          commands << [:stack_push, var_addr]
-          commands << [:heap_load]
-        end
-
-        block.call
-
-        lvars.size.times do
-          commands << [:heap_save]
-        end
-      end
-
       # stack: [recv]
       private def compile_call(name, args)
         commands = []
         commands.concat SAVE_TMP_COMMANDS
-        with_storing_lvars(commands) do
-          # Update self
-          commands.concat LOAD_TMP_COMMANDS
-          commands.concat save_to_self_commands
 
+        # Update self
+        commands.concat LOAD_TMP_COMMANDS
+        commands.concat save_to_self_commands
 
-          # push args
-          args.each do |arg|
-            commands.concat(compile_expr(arg))
-          end
-
-
-          commands << [:flow_call, ident_to_label(name)]
-          commands << [:stack_push, TMP_ADDR]
-          commands << [:stack_swap]
-          commands << [:heap_save]
+        # push args
+        args.each do |arg|
+          commands.concat(compile_expr(arg))
         end
+
+        commands << [:flow_call, ident_to_label(name)]
+        commands << [:stack_push, TMP_ADDR]
+        commands << [:stack_swap]
+        commands << [:heap_save]
+
         # restore return value
         commands << [:stack_push, TMP_ADDR]
         commands << [:heap_load]
@@ -916,15 +894,14 @@ module Akaza
         ]
         args = lvar_table[0...args_count].reverse
         m.concat update_lvar_commands(lvar_table, args: args)
+
+        m.concat allocate_lvars_commands
         args.each do |args_name|
-          addr = variable_name_to_addr(args_name)
-          m << [:stack_push, addr]
+          m.concat lvar_addr_commands(args_name)
           m << [:stack_swap]
           m << [:heap_save]
         end
-
-        m.concat allocate_lvars_commands
-        m.concat(compile_expr(body))
+        m.concat compile_expr(body)
         m.concat drop_lvars_commands
 
         @lvars_stack.pop
@@ -1770,6 +1747,19 @@ module Akaza
         commands << [:stack_push, size]
         commands << [:calc_sub]
         commands << [:heap_save]
+        commands
+      end
+
+      # return stack: [addr]
+      private def lvar_addr_commands(name)
+        commands = []
+        commands << [:stack_push, LVAR_TABLE_ADDR]
+        commands << [:heap_load]
+        commands << [:stack_push, LVAR_TABLE_SIZE_ADDR]
+        commands << [:heap_load]
+        commands << [:calc_add]
+        commands << [:stack_push, lvar_offset(name) + 1]
+        commands << [:calc_sub]
         commands
       end
 

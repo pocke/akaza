@@ -30,6 +30,13 @@ class Ruby2wsTest < Minitest::Test
     assert_eval "42", "def put_42() put_as_number(42) end; put_42"
   end
 
+  def test_transpile_lvar
+    assert_eval "42", <<~RUBY
+      x = 42
+      put_as_number x
+    RUBY
+  end
+
   def test_transpile_def_lvar1
     assert_eval "42", <<~RUBY
       x = 2
@@ -1116,6 +1123,17 @@ class Ruby2wsTest < Minitest::Test
       put_as_number hash[key2]
       put_as_number hash[key3]
       put_as_number hash[key4]
+    RUBY
+  end
+
+  def test_transpile_lvar_call
+    assert_eval "42", <<~RUBY
+      def x(a)
+        put_as_number a
+      end
+
+      b = 42
+      x(b)
     RUBY
   end
 end

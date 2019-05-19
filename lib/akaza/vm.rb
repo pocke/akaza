@@ -15,10 +15,10 @@ module Akaza
 
     def eval
       while true
-        # p @stack
-        # p @heap
-        # puts '-' * 100
-        # p @commands[@index]
+        p @stack
+        p @heap
+        puts '-' * 100
+        p @commands[@index]
         case @commands[@index]
         in [:stack_push, number]
           @stack.push number
@@ -48,7 +48,8 @@ module Akaza
           addr = @stack.pop
           @heap[addr] = val
         in [:heap_load]
-          val = @heap[@stack[-1]]
+          addr = @stack[-1]
+          val = @heap[addr]
           raise "Heap #{addr} is not initialized" unless val
           @stack[-1] = val
         in [:flow_def, label]
