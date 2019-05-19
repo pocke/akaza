@@ -3,8 +3,22 @@ class Array
     self[0]
   end
 
+  def last
+    self[size-1]
+  end
+
   def empty?
     size == 0
+  end
+
+  def zip(other)
+    res = []
+    idx = 0
+    while idx < size
+      res.push(idx < other.size ? [self[idx], other[idx]] : [self[idx], nil])
+      idx = idx + 1
+    end
+    res
   end
 end
 
@@ -62,4 +76,5 @@ def p(obj)
   else
     raise "Unknown"
   end
+  obj
 end

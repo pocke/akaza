@@ -579,14 +579,16 @@ module Akaza
         commands = []
         commands.concat SAVE_TMP_COMMANDS
         with_storing_lvars(commands) do
-          # save self
+          # Update self
           commands.concat LOAD_TMP_COMMANDS
           commands.concat save_to_self_commands
+
 
           # push args
           args.each do |arg|
             commands.concat(compile_expr(arg))
           end
+
 
           commands << [:flow, :call, ident_to_label(name)]
           commands << [:stack, :push, TMP_ADDR]

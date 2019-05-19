@@ -1118,11 +1118,4 @@ class Ruby2wsTest < Minitest::Test
       put_as_number hash[key4]
     RUBY
   end
-
-  def assert_eval(expected_output, code, input = StringIO.new(''))
-    ws = Akaza::Ruby2ws.ruby_to_ws(code)
-    out = StringIO.new
-    Akaza.eval(ws, input: input, output: out)
-    assert_equal expected_output, out.string
-  end
 end
