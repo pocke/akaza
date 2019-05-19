@@ -1343,71 +1343,91 @@ module Akaza
       # return stack: [self]
       private def define_array_push
         label = ident_to_label(:'Array#push')
-        when_realloc_label = ident_to_label(nil)
-        when_no_realloc_label = ident_to_label(nil)
         commands = []
         commands << [:flow_def, label]
 
         commands.concat load_from_self_commands
         commands.concat(UNWRAP_COMMANDS)
         # stack: [item, addr_of_first_addr]
-
-        # Check realloc necessary
-        commands << [:stack_dup]
         commands << [:stack_push, 1]
         commands << [:calc_add]
-        # stack: [item, addr_of_first_addr, addr_of_size]
-        commands << [:stack_dup]
-        commands << [:stack_push, 1]
-        commands << [:calc_add]
-        # stack: [item, addr_of_first_addr, addr_of_size, addr_of_cap]
-        commands << [:heap_load]
         commands << [:stack_swap]
-        commands << [:heap_load]
-        # stack: [item, addr_of_first_addr, cap, size]
-        commands << [:calc_sub]
-        commands << [:flow_jump_if_zero, when_realloc_label]
-        commands << [:flow_jump, when_no_realloc_label]
+        commands.concat load_from_self_commands
+        commands.concat(UNWRAP_COMMANDS)
+        # stack: [addr_of_size, item, addr_of_first_addr]
 
-        # Realloc
-        commands << [:flow_def, when_realloc_label]
-        commands << [:stack_dup]
-        commands << [:flow_call, realloc_array_label]
-
-        commands << [:flow_def, when_no_realloc_label]
-
-        # Push
-        # stack: [item, addr_of_first_addr]
-        commands << [:stack_dup]
-        commands << [:stack_push, 1]
-        commands << [:calc_add]
-        commands << [:heap_load]
-        # stack: [item, addr_of_first_addr, size]
-        commands << [:stack_swap]
-        commands << [:heap_load]
-        # stack: [item, size, first_addr]
-        commands << [:calc_add]
-        # stack: [item, addr_of_target]
-        commands << [:stack_swap]
-        commands << [:heap_save]
+        commands << [:flow_call, array_push_body_label]
 
         commands.concat load_from_self_commands
-        # Update size
-        commands << [:stack_dup]
-        commands.concat UNWRAP_COMMANDS
-        # stack: [self, addr_of_first_addr]
-        commands << [:stack_push, 1]
-        commands << [:calc_add]
-        commands << [:stack_dup]
-        commands << [:heap_load]
-        # stack: [self, size_addr, size]
-        commands << [:stack_push, 1]
-        commands << [:calc_add]
-        commands << [:heap_save]
 
         commands << [:flow_end]
         # stack: [self]
         @methods << commands
+      end
+
+      # Body of Array#push
+      # stack: [addr_of_size, item, addr_of_first_addr]
+      # return stack: []
+      private def array_push_body_label
+        @array_push_body_label ||= (
+          label = ident_to_label(nil)
+          when_realloc_label = ident_to_label(nil)
+          when_no_realloc_label = ident_to_label(nil)
+
+          commands = []
+          commands << [:flow_def, label]
+
+          # Check realloc necessary
+          commands << [:stack_dup]
+          commands << [:stack_push, 1]
+          commands << [:calc_add]
+          # stack: [addr_of_size, item, addr_of_first_addr, addr_of_size]
+          commands << [:stack_dup]
+          commands << [:stack_push, 1]
+          commands << [:calc_add]
+          # stack: [addr_of_size, item, addr_of_first_addr, addr_of_size, addr_of_cap]
+          commands << [:heap_load]
+          commands << [:stack_swap]
+          commands << [:heap_load]
+          # stack: [addr_of_size, item, addr_of_first_addr, cap, size]
+          commands << [:calc_sub]
+          commands << [:flow_jump_if_zero, when_realloc_label]
+          commands << [:flow_jump, when_no_realloc_label]
+
+          # Realloc
+          commands << [:flow_def, when_realloc_label]
+          commands << [:stack_dup]
+          commands << [:flow_call, realloc_array_label]
+
+          commands << [:flow_def, when_no_realloc_label]
+
+          # Push
+          # stack: [addr_of_size, item, addr_of_first_addr]
+          commands << [:stack_dup]
+          commands << [:stack_push, 1]
+          commands << [:calc_add]
+          commands << [:heap_load]
+          # stack: [addr_of_size, item, addr_of_first_addr, size]
+          commands << [:stack_swap]
+          commands << [:heap_load]
+          # stack: [addr_of_size, item, size, first_addr]
+          commands << [:calc_add]
+          # stack: [addr_of_size, item, addr_of_target]
+          commands << [:stack_swap]
+          commands << [:heap_save]
+          # stack: [addr_of_size]
+
+          commands << [:stack_dup]
+          commands << [:heap_load]
+          # stack: [size_addr, size]
+          commands << [:stack_push, 1]
+          commands << [:calc_add]
+          commands << [:heap_save]
+
+          commands << [:flow_end]
+          @methods << commands
+          label
+        )
       end
 
       # Array#[]
