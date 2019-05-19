@@ -923,7 +923,10 @@ module Akaza
           m << [:heap_save]
         end
 
+        m.concat allocate_lvars_commands
         m.concat(compile_expr(body))
+        m.concat drop_lvars_commands
+
         @lvars_stack.pop
         m << [:flow_end]
 
