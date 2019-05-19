@@ -20,62 +20,62 @@ module Akaza
         # puts '-' * 100
         # p @commands[@index]
         case @commands[@index]
-        in [:stack, :push, number]
+        in [:stack_push, number]
           @stack.push number
-        in [:stack, :dup]
+        in [:stack_dup]
           @stack.push @stack.last
-        in [:stack, :swap]
+        in [:stack_swap]
           @stack[-1], @stack[-2] = @stack[-2], @stack[-1]
-        in [:stack, :pop]
+        in [:stack_pop]
           @stack.pop
-        in [:calc, :add]
+        in [:calc_add]
           @stack[-2] = @stack[-2] + @stack[-1]
           @stack.pop
-        in [:calc, :sub]
+        in [:calc_sub]
           @stack[-2] = @stack[-2] - @stack[-1]
           @stack.pop
-        in [:calc, :multi]
+        in [:calc_multi]
           @stack[-2] = @stack[-2] * @stack[-1]
           @stack.pop
-        in [:calc, :div]
+        in [:calc_div]
           @stack[-2] = @stack[-2] / @stack[-1]
           @stack.pop
-        in [:calc, :mod]
+        in [:calc_mod]
           @stack[-2] = @stack[-2] % @stack[-1]
           @stack.pop
-        in [:heap, :save]
+        in [:heap_save]
           val = @stack.pop
           addr = @stack.pop
           @heap[addr] = val
-        in [:heap, :load]
+        in [:heap_load]
           val = @heap[@stack[-1]]
           raise "Heap #{addr} is not initialized" unless val
           @stack[-1] = val
-        in [:flow, :def, label]
+        in [:flow_def, label]
           # skip
-        in [:flow, :call, label]
+        in [:flow_call, label]
           raise "unknwon label:#{label.inspect}" unless @labels.key?(label)
           @call_stack.push @index
           @index = @labels[label]
-        in [:flow, :jump, label]
+        in [:flow_jump, label]
           raise "unknwon label:#{label.inspect}" unless @labels.key?(label)
           @index = @labels[label]
-        in [:flow, :jump_if_zero, label]
+        in [:flow_jump_if_zero, label]
           @index = @labels[label] if @stack.pop == 0
-        in [:flow, :jump_if_neg, label]
+        in [:flow_jump_if_neg, label]
           @index = @labels[label] if @stack.pop < 0
-        in [:flow, :end]
+        in [:flow_end]
           @index = @call_stack.pop
-        in [:flow, :exit]
+        in [:flow_exit]
           return
-        in [:io, :write_char]
+        in [:io_write_char]
           @output.write @stack.pop.chr
-        in [:io, :write_num]
+        in [:io_write_num]
           @output.write @stack.pop.to_s
-        in [:io, :read_char]
+        in [:io_read_char]
           addr = @stack.pop
           @heap[addr] = @input.read(1).ord
-        in [:io, :read_num]
+        in [:io_read_num]
           addr = @stack.pop
           @heap[addr] = @input.readline.to_i
         end
@@ -86,7 +86,7 @@ module Akaza
     def prepare_label
       @commands.each.with_index do |command, index|
         case command
-        in [:flow, :def, label]
+        in [:flow_def, label]
           @labels[label] = index
         else
           # skip
