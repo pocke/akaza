@@ -210,10 +210,6 @@ module Akaza
         ast = RubyVM::AbstractSyntaxTree.parse(@ruby_code)
         body = compile_expr(ast)
 
-        # Save self for top level
-        commands << [:stack_push, variable_name_to_addr(:self)]
-        commands << [:stack_push, NONE]
-        commands << [:heap_save]
 
         # Reserve heaps for local variables
         commands << [:stack_push, HEAP_COUNT_ADDR]
@@ -315,6 +311,9 @@ module Akaza
         in [:SCOPE, lvar_table, _, body]
           update_lvars(lvar_table)
           commands.concat allocate_lvars_commands
+          commands.concat lvar_addr_commands(:self)
+          commands << [:stack_push, NONE]
+          commands << [:heap_save]
           commands.concat(compile_expr(body))
           commands.concat drop_lvars_commands
           @lvars_stack.pop
@@ -330,12 +329,10 @@ module Akaza
             commands << [:stack_pop] unless index == children.size - 1
           end
         in [:VCALL, name]
-          commands << [:stack_push, variable_name_to_addr(:self)]
-          commands << [:heap_load]
+          commands.concat load_from_self_commands
           commands.concat compile_call_with_recv(name, [], error_target_node: node, explicit_self: false)
         in [:FCALL, name, [:ARRAY, *args, nil]]
-          commands << [:stack_push, variable_name_to_addr(:self)]
-          commands << [:heap_load]
+          commands.concat load_from_self_commands
           commands.concat compile_call_with_recv(name, args, error_target_node: node, explicit_self: false)
         in [:CALL, recv, :is_a?, [:ARRAY, klass, nil]]
           true_label = ident_to_label(nil)
@@ -582,11 +579,9 @@ module Akaza
       # stack: [recv]
       private def compile_call(name, args)
         commands = []
-        commands.concat SAVE_TMP_COMMANDS
-
-        # Update self
-        commands.concat LOAD_TMP_COMMANDS
-        commands.concat save_to_self_commands
+        commands.concat lvar_addr_commands(:self)
+        commands << [:stack_swap]
+        commands << [:heap_save]
 
         # push args
         args.each do |arg|
@@ -935,23 +930,11 @@ module Akaza
         commands
       end
 
-      # stack: [self]
-      # return stack: []
-      private def save_to_self_commands
-        commands = []
-        self_addr = variable_name_to_addr(:self)
-        commands << [:stack_push, self_addr]
-        commands << [:stack_swap]
-        commands << [:heap_save]
-        commands
-      end
-
       # stack: []
       # return stack: [self]
       private def load_from_self_commands
         commands = []
-        self_addr = variable_name_to_addr(:self)
-        commands << [:stack_push, self_addr]
+        commands.concat lvar_addr_commands(:self)
         commands << [:heap_load]
         commands
       end
@@ -1712,8 +1695,7 @@ module Akaza
       end
 
       private def update_lvars(table)
-        addr_table = table.dup
-        addr_table << :self
+        addr_table = [:self] + table.dup
         @lvars_stack << addr_table
       end
 
@@ -1754,6 +1736,7 @@ module Akaza
       end
 
       private def lvar_offset(name)
+        return 0 if name == :self
         lvars.index(name) || raise("lvar #{name} does not exist")
       end
 
