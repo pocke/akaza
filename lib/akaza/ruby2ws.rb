@@ -220,17 +220,17 @@ module Akaza
         commands = []
 
         case node
-        in [:FCALL, :put_as_number, [:ARRAY, arg, nil]]
+        in [:FCALL, :put_as_number, [:LIST, arg, nil]]
           commands.concat(compile_expr(arg))
           commands.concat(UNWRAP_COMMANDS)
           commands << [:io_write_num]
           commands << [:stack_push, NIL]
-        in [:FCALL, :put_as_char, [:ARRAY, arg, nil]]
+        in [:FCALL, :put_as_char, [:LIST, arg, nil]]
           commands.concat(compile_expr(arg))
           commands.concat(UNWRAP_COMMANDS)
           commands << [:io_write_char]
           commands << [:stack_push, NIL]
-        in [:FCALL, :raise, [:ARRAY, [:STR, str], nil]]
+        in [:FCALL, :raise, [:LIST, [:STR, str], nil]]
           commands.concat compile_raise(str, node)
         in [:VCALL, :get_as_number]
           commands << [:stack_push, TMP_ADDR]
@@ -244,11 +244,11 @@ module Akaza
           commands << [:stack_push, TMP_ADDR]
           commands << [:heap_load]
           commands.concat(WRAP_NUMBER_COMMANDS)
-        in [:OPCALL, l, :==, [:ARRAY, r, nil]]
+        in [:OPCALL, l, :==, [:LIST, r, nil]]
           commands.concat compile_expr(l)
           commands.concat compile_expr(r)
           commands << [:flow_call, op_eqeq_label]
-        in [:OPCALL, l, :!=, [:ARRAY, r, nil]]
+        in [:OPCALL, l, :!=, [:LIST, r, nil]]
           commands.concat compile_expr(l)
           commands.concat compile_expr(r)
           commands << [:flow_call, op_eqeq_label]
@@ -256,7 +256,7 @@ module Akaza
         in [:OPCALL, recv, :!, nil]
           commands.concat compile_expr(recv)
           commands << [:flow_call, op_not_label]
-        in [:OPCALL, l, :+ | :- | :* | :/ | :% => sym, [:ARRAY, r, nil]]
+        in [:OPCALL, l, :+ | :- | :* | :/ | :% => sym, [:LIST, r, nil]]
           com = {'+': :calc_add, '-': :calc_sub, '*': :calc_multi, '/': :calc_div, '%': :calc_mod}[sym]
           commands.concat(compile_expr(l))
           commands.concat(UNWRAP_COMMANDS)
@@ -264,7 +264,7 @@ module Akaza
           commands.concat(UNWRAP_COMMANDS)
           commands << [com]
           commands.concat(WRAP_NUMBER_COMMANDS)
-        in [:OPCALL, recv, op, [:ARRAY, *args, nil]]
+        in [:OPCALL, recv, op, [:LIST, *args, nil]]
           commands.concat compile_expr(recv)
           commands.concat compile_call_with_recv(op, args, error_target_node: recv, explicit_self: true)
         in [:VCALL, :exit]
@@ -283,7 +283,7 @@ module Akaza
           commands << [:stack_push, var_addr]
           commands << [:stack_swap]
           commands << [:heap_save]
-        in [:ATTRASGN, recv, :[]=, [:ARRAY, index, value, nil]]
+        in [:ATTRASGN, recv, :[]=, [:LIST, index, value, nil]]
           commands.concat compile_expr(recv)
           commands.concat compile_call_with_recv(:[]=, [index, value], error_target_node: node, explicit_self: true)
         in [:DEFN, name, [:SCOPE, lvar_table, [:ARGS, args_count ,*_], body]]
@@ -319,11 +319,11 @@ module Akaza
           commands << [:stack_push, variable_name_to_addr(:self)]
           commands << [:heap_load]
           commands.concat compile_call_with_recv(name, [], error_target_node: node, explicit_self: false)
-        in [:FCALL, name, [:ARRAY, *args, nil]]
+        in [:FCALL, name, [:LIST, *args, nil]]
           commands << [:stack_push, variable_name_to_addr(:self)]
           commands << [:heap_load]
           commands.concat compile_call_with_recv(name, args, error_target_node: node, explicit_self: false)
-        in [:CALL, recv, :is_a?, [:ARRAY, klass, nil]]
+        in [:CALL, recv, :is_a?, [:LIST, klass, nil]]
           true_label = ident_to_label(nil)
           end_label = ident_to_label(nil)
           commands.concat compile_expr(recv)
@@ -344,7 +344,7 @@ module Akaza
           commands << [:stack_push, TRUE]
 
           commands << [:flow_def, end_label]
-        in [:CALL, recv, name, [:ARRAY, *args, nil]]
+        in [:CALL, recv, name, [:LIST, *args, nil]]
           commands.concat compile_expr(recv)
           commands.concat compile_call_with_recv(name, args, error_target_node: recv, explicit_self: true)
         in [:CALL, recv, name, nil]
@@ -384,7 +384,7 @@ module Akaza
         in [:CONST, name]
           commands << [:stack_push, variable_name_to_addr(name)]
           commands << [:heap_load]
-        in [:ARRAY, *items, nil]
+        in [:LIST, *items, nil]
           commands.concat allocate_array_commands(items.size)
           # stack: [array]
 
@@ -405,12 +405,12 @@ module Akaza
           end
           commands << [:stack_pop]
 
-        in [:ZARRAY]
+        in [:ZLIST]
           # Allocate array ref
           commands.concat allocate_array_commands(0)
         in [:HASH, nil]
           commands.concat initialize_hash
-        in [:HASH, [:ARRAY, *pairs, nil]]
+        in [:HASH, [:LIST, *pairs, nil]]
           commands.concat initialize_hash
           commands << [:stack_dup]
           commands.concat UNWRAP_COMMANDS
@@ -733,13 +733,13 @@ module Akaza
         end
 
         case cond
-        in [:OPCALL, [:LIT, 0], :==, [:ARRAY, x, nil]]
+        in [:OPCALL, [:LIT, 0], :==, [:LIST, x, nil]]
           optimized_body.(x, :flow_jump_if_zero)
-        in [:OPCALL, x, :==, [:ARRAY, [:LIT, 0], nil]]
+        in [:OPCALL, x, :==, [:LIST, [:LIT, 0], nil]]
           optimized_body.(x, :flow_jump_if_zero)
-        in [:OPCALL, x, :<, [:ARRAY, [:LIT, 0], nil]]
+        in [:OPCALL, x, :<, [:LIST, [:LIT, 0], nil]]
           optimized_body.(x, :flow_jump_if_neg)
-        in [:OPCALL, [:LIT, 0], :<, [:ARRAY, x, nil]]
+        in [:OPCALL, [:LIT, 0], :<, [:LIST, x, nil]]
           optimized_body.(x, :flow_jump_if_neg)
         else
           if_label = ident_to_label(nil)
@@ -783,7 +783,7 @@ module Akaza
 
         first_when.each_when do |when_node|
           case when_node
-          in [:WHEN, [:ARRAY, *objs, nil], body, _]
+          in [:WHEN, [:LIST, *objs, nil], body, _]
             bodies << body
             body_labels << ident_to_label(nil)
 
@@ -843,13 +843,13 @@ module Akaza
           commands.concat compile_expr(body)
           commands << [:stack_pop]
           commands << [:flow_jump, cond_label]
-        in [:OPCALL, [:LIT, 0], :==, [:ARRAY, x, nil]]
+        in [:OPCALL, [:LIT, 0], :==, [:LIST, x, nil]]
           make_body.(x, :flow_jump_if_zero)
-        in [:OPCALL, x, :==, [:ARRAY, [:LIT, 0], nil]]
+        in [:OPCALL, x, :==, [:LIST, [:LIT, 0], nil]]
           make_body.(x, :flow_jump_if_zero)
-        in [:OPCALL, x, :<, [:ARRAY, [:LIT, 0], nil]]
+        in [:OPCALL, x, :<, [:LIST, [:LIT, 0], nil]]
           make_body.(x, :flow_jump_if_neg)
-        in [:OPCALL, [:LIT, 0], :<, [:ARRAY, x, nil]]
+        in [:OPCALL, [:LIT, 0], :<, [:LIST, x, nil]]
           make_body.(x, :flow_jump_if_neg)
         else
           commands << [:flow_def, cond_label]
@@ -1697,7 +1697,7 @@ module Akaza
           commands << [:stack_push, NIL]
           commands << [:heap_save]
         end
-        @lvars_stack << addr_table.map{@2}
+        @lvars_stack << addr_table.map{_2}
         lvars << variable_name_to_addr(:self)
         commands
       end
