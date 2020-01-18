@@ -1697,7 +1697,7 @@ module Akaza
           commands << [:stack_push, NIL]
           commands << [:heap_save]
         end
-        @lvars_stack << addr_table.map{@2}
+        @lvars_stack << addr_table.map{_2}
         lvars << variable_name_to_addr(:self)
         commands
       end
