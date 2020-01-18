@@ -8,8 +8,8 @@ Gem::Specification.new do |spec|
   spec.authors       = ["Masataka Pocke Kuwabara"]
   spec.email         = ["kuwabara@pocke.me"]
 
-  spec.summary       = %q{}
-  spec.description   = %q{}
+  spec.summary       = %q{A cool Whitespace language implementation in Ruby.}
+  spec.description   = %q{A cool Whitespace language implementation in Ruby.}
   spec.homepage      = "https://github.com/pocke/akaza"
 
   spec.license       = 'CC-0-1.0'
