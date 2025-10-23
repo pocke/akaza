@@ -1,3 +1,5 @@
+require 'stringio'
+
 require "akaza/version"
 require 'akaza/ast_ext'
 require 'akaza/annotation'
