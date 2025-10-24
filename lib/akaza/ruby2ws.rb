@@ -359,7 +359,7 @@ module Akaza
           commands.concat compile_case(cond, first_when)
         in [:WHILE, cond, body, true]
           commands.concat(compile_while(cond, body))
-        in [:LIT, num]
+        in [:INTEGER, num]
           commands << [:stack_push, with_type(num, TYPE_INT)]
         in [:STR, str]
           check_char!(str)
