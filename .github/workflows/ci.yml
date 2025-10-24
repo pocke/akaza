@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      RUBYOPT: --parser=parse.y
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby:
+          - '3.4'
+          - 'head'
+    continue-on-error: ${{ matrix.ruby == 'head' }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Ruby
+      uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: ${{ matrix.ruby }}
+        bundler-cache: true
+
+    - name: Run tests
+      run: bundle exec rake
