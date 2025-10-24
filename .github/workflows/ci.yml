@@ -9,11 +9,13 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      RUBYOPT: --parser=parse.y
     strategy:
       fail-fast: false
       matrix:
         ruby:
-          - '2.7.0'
+          - '3.4'
           - 'head'
     continue-on-error: ${{ matrix.ruby == 'head' }}
 
